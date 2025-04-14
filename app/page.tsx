@@ -23,10 +23,10 @@ import {
 // import { Link as ScrollLink } from 'react-scroll';
 // import { VideoModal } from '@/components/VideoModal';
 import Hero from "@/components/landing/hero";
-import KeyFeatures from "@/components/landing/key-features";
+import { KeyFeatures } from "@/components/landing/key-features";
 import Testimonials from "@/components/landing/testimonials";
-import FAQ from "@/components/landing/faq";
-import Footer from "@/components/footer";
+import { FAQ } from "@/components/landing/faq";
+import { Footer } from "@/components/footer";
 import { Suspense } from "react";
 import PostHogPageView from "@/components/PostHogPageView";
 import TopBar from "@/components/TopBar";

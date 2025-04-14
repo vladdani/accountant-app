@@ -3,7 +3,7 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { CoreMessage, generateText, tool } from 'ai';
 import { z } from 'zod';
-import { createServerActionClient } from '@supabase/auth-helpers-nextjs';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { queryStructuredDocumentsAction } from './query-structured-documents';
 
@@ -26,11 +26,16 @@ type StructuredToolExecuteSuccessResult = {
 };
 
 // --- Constants and Setup ---
-const TEMP_TEST_USER_ID = '0d4f5e60-258a-46ea-92ce-c0ffc9263e1b';
+// Remove unused constant
+// const TEMP_TEST_USER_ID = '0d4f5e60-258a-46ea-92ce-c0ffc9263e1b';
+
 // ... (Google API Key Check, AI Client Init) ...
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) { throw new Error('Missing GOOGLE_GENERATIVE_AI_API_KEY environment variable.'); }
+if (!supabaseUrl || !supabaseAnonKey) { throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable.'); }
 const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
-const model = google('models/gemini-2.0-flash');
+const model = google('models/gemini-1.5-flash');
 const querySchema = z.object({ userQuery: z.string().min(1), chatHistory: z.array(z.custom<CoreMessage>()).optional(), });
 
 // ---+++ NEW Structured Query Tool Definition +++---
@@ -46,16 +51,12 @@ const queryDocumentsTool = tool({
     currency: z.string().optional().describe("The 3-letter currency code to filter by (e.g., 'IDR', 'USD')."),
   }),
   // Execute function will call the new structured query action (to be created)
-  execute: async (args, { userId }: { userId: string | null }): Promise<StructuredToolExecuteSuccessResult | { queryResults: string, error: string }> => {
+  execute: async (args): Promise<StructuredToolExecuteSuccessResult | { queryResults: string, error: string }> => {
     console.log(`AI requested structured query with args:`, args);
 
-    if (!userId) {
-      console.error('Structured Query Tool Error: userId not provided.');
-      return { queryResults: "", error: 'Authentication context missing.' };
-    }
-
-    // ---+++ Call the actual structured query action +++---
-    const result = await queryStructuredDocumentsAction({ ...args, userId });
+    // --- Call the actual structured query action --- 
+    // Pass args directly, userId is no longer needed here
+    const result = await queryStructuredDocumentsAction(args); 
     
     if (!result.success) {
       console.error('queryStructuredDocumentsAction failed:', result.error);
@@ -64,13 +65,11 @@ const queryDocumentsTool = tool({
     
     if (!result.data || result.data.length === 0) {
       console.log('queryStructuredDocumentsAction returned no results.');
-      return { queryResults: "No documents found matching those criteria." }; // Return success with message
+      return { queryResults: "No documents found matching those criteria." };
     }
     
     console.log(`queryStructuredDocumentsAction returned ${result.data.length} results.`);
-    // Return success with the structured data array
     return { queryResults: result.data }; 
-    // ---+++++++++++++++++++++++++++++++++++++++++++++++---
   },
 });
 // ---++++++++++++++++++++++++++++++++++++++++++++---
@@ -80,16 +79,27 @@ export async function handleUserSearchQueryAction(
   input: z.infer<typeof querySchema>
 ): Promise<{ success: boolean; response?: string; error?: string }> {
 
-  // --- Authentication (Keep Bypass Logic) ---
+  // --- Authentication (REMOVE Bypass Logic) ---
   let currentUserId: string | null = null;
   try { 
       const cookieStore = cookies();
-      const supabase = createServerActionClient({ cookies: () => cookieStore });
+      const supabase = createServerClient( 
+        supabaseUrl!, 
+        supabaseAnonKey!, 
+        { cookies: { 
+            get(name: string) { return cookieStore.get(name)?.value; },
+            set(name: string, value: string, options: CookieOptions) { cookieStore.set({ name, value, ...options }); },
+            remove(name: string, options: CookieOptions) { cookieStore.set({ name, value: '', ...options }); }
+         } }
+      );
       const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) { currentUserId = TEMP_TEST_USER_ID; console.warn(`Using TEMP ID: ${currentUserId}`); }
-      else { currentUserId = user.id; console.log(`Using real ID: ${currentUserId}`);}
-  } catch (catchError) { currentUserId = TEMP_TEST_USER_ID; console.error(`Auth Error, Using TEMP ID: ${currentUserId}`, catchError); }
-  if (!currentUserId) { return { success: false, error: 'User identification failed.' }; }
+      if (authError || !user) { throw new Error("Authentication failed"); }
+      currentUserId = user.id;
+      console.log(`Using real ID: ${currentUserId}`);
+  } catch (catchError) { 
+      console.error('Auth Error in handleUserSearchQueryAction:', catchError);
+      return { success: false, error: 'User identification failed.' }; 
+  }
   // ------------------------------------------
 
   // --- Input Validation (Keep) ---
@@ -137,11 +147,11 @@ export async function handleUserSearchQueryAction(
         toolArgs = toolCall.args as z.infer<typeof queryDocumentsTool.parameters>; 
         try {
           // --- Execute the NEW tool --- 
-          if (!currentUserId) throw new Error("Authentication context lost before tool execution.");
-          // Pass the typed toolArgs, remove the userId parameter
-          const rawToolResult = await queryDocumentsTool.execute(
-              toolArgs 
-          );
+          // Remove check for currentUserId, auth is now handled inside the called action
+          // if (!currentUserId) throw new Error("Authentication context lost before tool execution.");
+          
+          // Call execute without userId
+          const rawToolResult = await queryDocumentsTool.execute(toolArgs);
           // ----------------------------- 
           
           // Format the result into a simple string summary

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { motion } from "framer-motion";
 import { PlayCircle } from "lucide-react";
 import { useState } from "react";
-import VideoModal from "@/components/VideoModal";
+import { VideoModal } from "@/components/VideoModal";
 
 export default function Hero() {
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
