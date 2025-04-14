@@ -1,0 +1,28 @@
+{
+  "node": {
+    "40a5f3efd6588bb8e57d665fd097f9146b7926f8ff": {
+      "workers": {
+        "app/dashboard/page": {
+          "moduleId": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fvlad%2FDocuments%2FAccountantApp%2Fapp%2Factions%2Fupload-file.ts%22%2C%5B%5B%2240a5f3efd6588bb8e57d665fd097f9146b7926f8ff%22%2C%22uploadFile%22%5D%5D%5D%2C%5B%22%2FUsers%2Fvlad%2FDocuments%2FAccountantApp%2Fapp%2Factions%2Fhandle-user-search-query.ts%22%2C%5B%5B%22409f345ee0591582c7993f400f18be13da45143915%22%2C%22handleUserSearchQueryAction%22%5D%5D%5D%5D&__client_imported__=true!",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/dashboard/page": "action-browser"
+      }
+    },
+    "409f345ee0591582c7993f400f18be13da45143915": {
+      "workers": {
+        "app/dashboard/page": {
+          "moduleId": "(action-browser)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2FUsers%2Fvlad%2FDocuments%2FAccountantApp%2Fapp%2Factions%2Fupload-file.ts%22%2C%5B%5B%2240a5f3efd6588bb8e57d665fd097f9146b7926f8ff%22%2C%22uploadFile%22%5D%5D%5D%2C%5B%22%2FUsers%2Fvlad%2FDocuments%2FAccountantApp%2Fapp%2Factions%2Fhandle-user-search-query.ts%22%2C%5B%5B%22409f345ee0591582c7993f400f18be13da45143915%22%2C%22handleUserSearchQueryAction%22%5D%5D%5D%5D&__client_imported__=true!",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/dashboard/page": "action-browser"
+      }
+    }
+  },
+  "edge": {},
+  "encryptionKey": "8Lo+KVqSRGugMQmZZ2NxqXQlFbhTX8qMj5FeAp942Ow="
+}
