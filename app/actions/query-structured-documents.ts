@@ -132,8 +132,19 @@ export async function queryStructuredDocumentsAction(
     }
 
     console.log(`Structured query returned ${data?.length ?? 0} results.`);
-    // Explicitly cast data to the expected type for safety
-    const resultData: StructuredQueryResult[] = data as StructuredQueryResult[] || [];
+    
+    // Transform the data to match our interface structure
+    const resultData: StructuredQueryResult[] = data ? data.map(item => ({
+      id: item.id,
+      name: item.original_filename, // Map original_filename to name
+      url: item.document_url,       // Map document_url to url
+      vendor: item.vendor,
+      document_date: item.document_date,
+      document_type: item.document_type,
+      total_amount: item.total_amount,
+      currency: item.currency
+    })) : [];
+    
     return { success: true, data: resultData };
 
   } catch (err) {
