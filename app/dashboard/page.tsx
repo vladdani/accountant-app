@@ -400,7 +400,7 @@ export default function Dashboard() {
     // Data fetching is handled by the useEffect watching selectedFilter
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || isLoadingChat) return;
     
