@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const next = searchParams.get('next') ?? '/'
 
   if (code) {
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
 
     if (!supabaseUrl || !supabaseAnonKey) {
        // Handle missing env vars - maybe redirect to an error page

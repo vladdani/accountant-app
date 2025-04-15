@@ -61,7 +61,7 @@ const extractionModel = genAI.getGenerativeModel({
 
 export async function uploadFile(formData: FormData): Promise<UploadResult> {
   console.log("--- Running Full uploadFile Action --- ");
-  const cookieStore = cookies(); // <<< Get cookies
+  const cookieStore = await cookies(); // Add await
 
   // <<< Create Supabase client for Server Actions using @supabase/ssr >>>
   const supabaseUserClient = createServerClient(

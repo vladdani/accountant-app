@@ -185,9 +185,8 @@ export async function handleUserSearchQueryAction(
               toolName: toolName,
               result: toolCallResultContent // The actual result object
             }
-          ],
-          toolCallId: toolCall.toolCallId, // Keep toolCallId here as well for CoreMessage structure
-          // Remove redundant toolName from the top level
+          ]
+          // Remove toolCallId from the top level, it only belongs inside the content array
         });
       }
 

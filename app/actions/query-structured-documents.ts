@@ -49,7 +49,7 @@ export async function queryStructuredDocumentsAction(
 
   try {
     // Use createServerClient from @supabase/ssr for authentication
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const supabase = createServerClient(
       supabaseUrl!, // Use loaded env vars
       supabaseAnonKey!, 
