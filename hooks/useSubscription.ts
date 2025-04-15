@@ -4,6 +4,20 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import debounce from 'lodash/debounce';
 
+// Create a global cache that can be accessed outside the hook
+const subscriptionCacheMap = new Map<string, {data: Subscription | null, timestamp: number}>();
+const CACHE_DURATION = 30000; // 30 seconds
+
+// Add a function to clear the cache for a specific user
+export function clearSubscriptionCache(userId: string) {
+  if (subscriptionCacheMap.has(userId)) {
+    console.log(`Clearing subscription cache for user ${userId}`);
+    subscriptionCacheMap.delete(userId);
+    return true;
+  }
+  return false;
+}
+
 export interface Subscription {
   id: string;
   user_id: string;
@@ -22,26 +36,27 @@ export function useSubscription() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const subscriptionCache = new Map<string, {data: Subscription | null, timestamp: number}>();
-  const CACHE_DURATION = 30000; // 30 seconds
-
-  const fetchSubscription = useCallback(async () => {
+  const fetchSubscription = useCallback(async (skipCache = false) => {
     if (!user?.id) {
       setSubscription(null);
       setLoading(false);
       return;
     }
 
-    // Check cache first
-    const cached = subscriptionCache.get(user.id);
+    // Check cache first (unless skipCache is true)
+    const cached = !skipCache && subscriptionCacheMap.get(user.id);
     const now = Date.now();
     
     if (cached && (now - cached.timestamp < CACHE_DURATION)) {
+      console.log("Using cached subscription data");
       setSubscription(cached.data);
       setLoading(false);
       return;
     }
 
+    console.log("Fetching fresh subscription data from database");
+    setLoading(true);
+    
     try {
       const { data, error } = await supabase
         .from('subscriptions')
@@ -60,11 +75,12 @@ export function useSubscription() {
       const result = isValid ? data : null;
       
       // Update cache
-      subscriptionCache.set(user.id, {
+      subscriptionCacheMap.set(user.id, {
         data: result,
         timestamp: now
       });
       
+      console.log("Subscription data refreshed:", result ? { status: result.status, validUntil: result.current_period_end } : "No valid subscription");
       setSubscription(result);
     } catch (err) {
       console.error('Subscription fetch error:', err);

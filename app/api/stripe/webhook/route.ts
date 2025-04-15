@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '@/utils/supabase-admin';
 import { withCors } from '@/utils/cors';
+import { clearSubscriptionCache } from '@/hooks/useSubscription';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
@@ -173,6 +174,14 @@ export const POST = withCors(async function POST(request: NextRequest) {
       case 'customer.subscription.trial_will_end': {
         const subscription = event.data.object as Stripe.Subscription;
         
+        // First get the user_id for this subscription to clear cache
+        const { data: subscriptionData } = await supabaseAdmin
+          .from('subscriptions')
+          .select('user_id')
+          .eq('stripe_subscription_id', subscription.id)
+          .single();
+        
+        // Update the subscription in the database
         await supabaseAdmin
           .from('subscriptions')
           .update({
@@ -182,6 +191,12 @@ export const POST = withCors(async function POST(request: NextRequest) {
             updated_at: new Date().toISOString()
           })
           .eq('stripe_subscription_id', subscription.id);
+        
+        // Clear the cache for this user if we found their ID
+        if (subscriptionData?.user_id) {
+          logWebhookEvent('Clearing subscription cache for user', subscriptionData.user_id);
+          clearSubscriptionCache(subscriptionData.user_id);
+        }
         
         break;
       }
@@ -264,6 +279,11 @@ async function createSubscription(subscriptionId: string, userId: string, custom
         logWebhookEvent('Error updating existing subscription', updateError);
         throw updateError;
       }
+      
+      // Clear the subscription cache for this user
+      logWebhookEvent('Clearing subscription cache for user', existingData.user_id);
+      clearSubscriptionCache(existingData.user_id);
+      
       return existingData;
     }
 
@@ -297,8 +317,11 @@ async function createSubscription(subscriptionId: string, userId: string, custom
       logWebhookEvent('Error inserting new subscription', { error: insertError, attemptedData: subscriptionData });
       throw insertError;
     }
-
-    logWebhookEvent('Successfully created new subscription', data);
+    
+    // Clear the subscription cache for this user after creating a new subscription
+    logWebhookEvent('Clearing subscription cache for user', userId);
+    clearSubscriptionCache(userId);
+    
     return data;
   } catch (error) {
     logWebhookEvent('Error in createSubscription', error);

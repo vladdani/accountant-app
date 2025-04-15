@@ -26,9 +26,11 @@ import {
   Inbox,
   // Upload,
   // LogOut, // No longer used in header
-  // Loader2, // Commented out as it might be used implicitly by Skeleton
   FileText, // Generic document icon
   // Calendar // Commented out, will be used for date filtering later
+  MessageSquare,
+  Send,
+  Loader2,
 } from 'lucide-react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 // import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // No longer used
@@ -45,7 +47,6 @@ import {
 } from "@/components/ui/dropdown-menu"; 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"; 
 */
-import { ScrollArea } from "@/components/ui/scroll-area"; 
 import { Skeleton } from "@/components/ui/skeleton";
 // Shadcn Table Components
 import {
@@ -61,6 +62,13 @@ import {
 import { handleUserSearchQueryAction } from '@/app/actions/handle-user-search-query';
 // Import CoreMessage type from Vercel AI SDK
 import type { CoreMessage } from 'ai';
+
+// Import React Markdown
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+
+// Import Input and Textarea components
+import { Textarea } from "@/components/ui/textarea";
 
 // --- Types ---
 interface Document {
@@ -256,7 +264,40 @@ export default function Dashboard() {
   useEffect(() => {
     if (user?.id) {
       console.log("Dashboard mounted/user changed, forcing subscription fetch.");
-      fetchSubscription(); 
+      // Force refresh subscription data with skipCache=true
+      fetchSubscription(true); 
+      
+      // Also call the subscription refresh API endpoint
+      const refreshSubscription = async () => {
+        try {
+          console.log("Calling subscription refresh API...");
+          const response = await fetch('/api/subscription/refresh', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error("Failed to refresh subscription:", errorData);
+            return;
+          }
+          
+          const data = await response.json();
+          console.log("Subscription refresh API response:", data);
+          
+          // If subscription found, force another fetch to sync the client
+          if (data.hasActiveSubscription && data.subscription) {
+            console.log("Active subscription found, refreshing client state");
+            setTimeout(() => fetchSubscription(true), 500);
+          }
+        } catch (error) {
+          console.error("Error calling subscription refresh API:", error);
+        }
+      };
+      
+      refreshSubscription();
       
       const checkOnboarding = async () => {
         try {
@@ -295,28 +336,40 @@ export default function Dashboard() {
     }
 
     // Only perform check if we have definitively loaded user/sub/trial states
-    console.log("Checking access permissions...", { user: !!user, status: subscription?.status, isInTrial });
-    // Restore hasValidSubscription check
+    console.log("Checking access permissions...", { user: !!user, subscription, status: subscription?.status, isInTrial });
+    
+    // Restore hasValidSubscription check with enhanced logging
     const hasValidSubscription = subscription && ['active', 'trialing'].includes(subscription.status);
+    
+    if (hasValidSubscription) {
+      console.log("Valid subscription detected:", subscription.status);
+    }
+    
+    if (isInTrial) {
+      console.log("User is in trial period");
+    }
 
-    // --- START: REMOVE TEMPORARY WORKAROUND --- 
-    /* 
-    console.warn("WORKAROUND ACTIVE: Dashboard access granted regardless of subscription/trial status.");
-    if (!user) { // Still redirect if not logged in
-        console.log(`Redirecting to /login. Reason: No user`);
-        router.replace('/login'); 
+    // Only redirect if user is not logged in
+    if (!user) {
+      console.log("Redirecting to /login: No user found");
+      router.replace('/login');
+      return;
     }
-    */
-    // --- Restore Original Check ---
-    // If user data is loaded but user is invalid OR no valid subscription/trial, redirect.
-    if (!user || (!hasValidSubscription && !isInTrial)) {
-        console.log(`Redirecting to /profile. Reason: ${!user ? 'No user' : 'No valid sub or trial'}`);
-        router.replace('/profile');
+    
+    // If no valid subscription AND no trial, redirect to profile
+    if (!hasValidSubscription && !isInTrial) {
+      console.log("Redirecting to /profile: No valid subscription or trial", { 
+        subscriptionStatus: subscription?.status,
+        isInTrial
+      });
+      router.replace('/profile');
     } else {
-        // No need to set hasCheckedSubscription anymore
-        console.log("User has access to dashboard.");
+      console.log("User has access to dashboard:", { 
+        hasValidSubscription,
+        subscriptionStatus: subscription?.status,
+        isInTrial
+      });
     }
-    // --- END: REMOVE TEMPORARY WORKAROUND ---
 
   // Depend on the actual data and loading states needed for the decision
   }, [user, subscription, isInTrial, isAuthLoading, isSubLoading, isTrialLoading, router]);
@@ -347,14 +400,14 @@ export default function Dashboard() {
     // Data fetching is handled by the useEffect watching selectedFilter
   };
 
-  const handleSendMessage = async () => {
-    const trimmedInput = chatInput.trim();
-    if (!trimmedInput || isLoadingChat) return;
-
+  const handleSendMessage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isLoadingChat) return;
+    
     const newUserMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: trimmedInput,
+      content: chatInput,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
@@ -395,7 +448,7 @@ export default function Dashboard() {
     try {
       // Call the new AI search action
       const result = await handleUserSearchQueryAction({
-        userQuery: trimmedInput,
+        userQuery: chatInput,
         chatHistory: historyForAI.slice(0, -1), // Send history *before* the latest user message
       });
 
@@ -430,13 +483,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      handleSendMessage();
-    }
-  };
-
   // --- Conditional Returns *AFTER* all hooks ---
   if (isAuthLoading || isTrialLoading) {
      return (
@@ -448,17 +494,17 @@ export default function Dashboard() {
 
   // --- Main Component Return --- 
   return (
-    <div className="h-screen w-full flex flex-col bg-slate-50 dark:bg-[#0B1120] overflow-hidden">
+    <div className="h-[100vh] max-h-[100vh] w-full flex flex-col bg-slate-50 dark:bg-[#0B1120] overflow-hidden">
       {/* Resizable panel group starts immediately */}
       <ResizablePanelGroup 
         direction={isMobile ? "vertical" : "horizontal"} 
-        className="w-full h-full flex-grow"
+        className="w-full h-full flex-grow overflow-hidden"
       > 
         {/* Left Sidebar - UPDATED with responsive layout */}
         <ResizablePanel 
-          defaultSize={isMobile ? 15 : 20} 
-          minSize={isMobile ? 10 : 15} 
-          maxSize={isMobile ? 40 : 25} 
+          defaultSize={isMobile ? 25 : 20} 
+          minSize={isMobile ? 20 : 15} 
+          maxSize={isMobile ? 50 : 25} 
           className="bg-white dark:bg-neutral-dark border-r dark:border-slate-700 p-4 flex flex-col h-full overflow-hidden"
         >
           <div className="flex-shrink-0">
@@ -523,9 +569,9 @@ export default function Dashboard() {
 
         {/* Center Content Area - UPDATED */}
         <ResizablePanel 
-          defaultSize={isMobile ? 45 : 55} 
+          defaultSize={isMobile ? 35 : 55} 
           minSize={isMobile ? 30 : 40} 
-          className="flex flex-col p-4 md:p-6 overflow-hidden h-full"
+          className="flex flex-col p-3 md:p-6 overflow-hidden h-full max-h-full"
         >
           {/* --- RESTORE Integrated Upload Zone --- */}
           <div className="mb-6 p-4 md:p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-800 flex-shrink-0">
@@ -546,7 +592,7 @@ export default function Dashboard() {
           </h3>
           
           {/* Scrollable Table Container - Made responsive */}
-          <div className="flex-grow overflow-auto border dark:border-slate-700 rounded-md h-0 min-h-0"> 
+          <div className="flex-grow overflow-auto border dark:border-slate-700 rounded-md h-0 min-h-0 max-h-[calc(100%-4rem)]"> 
             <Table className="min-w-full">
               <TableHeader className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10">
                 <TableRow>
@@ -618,67 +664,87 @@ export default function Dashboard() {
         </ResizablePanel>
         <ResizableHandle withHandle />
 
-        {/* Right Chat Panel - Updated for responsiveness */}
+        {/* Right Chat Panel - Chat container needs improvements */}
         <ResizablePanel 
           defaultSize={isMobile ? 40 : 25} 
           minSize={isMobile ? 25 : 20} 
           maxSize={isMobile ? 60 : 35} 
-          className="bg-white dark:bg-neutral-dark border-l dark:border-slate-700 flex flex-col h-full overflow-hidden"
+          className="bg-white dark:bg-neutral-dark border-l dark:border-slate-700 flex flex-col h-full max-h-full overflow-hidden"
         >
           {/* Header (stays the same) */}
-          <div className="p-4 flex-shrink-0">
-            <h3 className="text-lg font-semibold mb-2 text-slate-900 dark:text-white">Semantic Search</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
-              Ask questions about your documents in natural language.
-            </p>
+          <div className="p-4 border-b dark:border-slate-700 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Document Assistant</h2>
           </div>
-          
-          {/* Scrollable Message Area (Takes up remaining space) */}
-          <ScrollArea className="flex-grow px-4 py-2 space-y-4 bg-slate-50 dark:bg-slate-800 border-t border-b dark:border-slate-700 h-0 min-h-0" ref={chatContainerRef}>
-            {chatMessages.map((message) => (
-              <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
-                <div className={`p-3 rounded-lg max-w-[80%] ${message.role === 'user' 
-                  ? 'bg-primary text-primary-foreground' 
-                  : 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200'
-                }`}>
-                  {/* Render JSX content directly */} 
-                  {typeof message.content === 'string' ? (
-                    <p className="text-sm whitespace-pre-wrap">{message.content}</p> 
-                  ) : ( 
-                    message.content
-                  )}
-                  <div className={`text-xs mt-1 ${message.role === 'user' ? 'text-primary-foreground/80' : 'text-slate-500 dark:text-slate-400'} text-right`}>{message.timestamp}</div>
+
+          {/* Chat Messages Container - IMPROVED SCROLLING */}
+          <div 
+            ref={chatContainerRef}
+            className="flex-grow overflow-y-auto p-4 space-y-4 h-0 min-h-0"
+          >
+            {chatMessages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 dark:text-slate-400 space-y-3">
+                <MessageSquare className="h-12 w-12" />
+                <div>
+                  <p className="font-medium">No messages yet</p>
+                  <p className="text-sm">Ask about your documents below</p>
                 </div>
               </div>
-            ))}
-             {/* Loading Indicator */}
-             {isLoadingChat && (
-               <div className="flex justify-start mb-4">
-                  <div className="p-3 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
-                    <Skeleton className="h-4 w-20" />
+            ) : (
+              chatMessages.map((message, index) => (
+                <div 
+                  key={index} 
+                  className={`flex ${
+                    message.role === 'user' ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  <div 
+                    className={`max-w-[85%] px-4 py-2 rounded-lg ${
+                      message.role === 'user'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-slate-200 dark:bg-slate-700 dark:text-white'
+                    }`}
+                  >
+                    <ReactMarkdown
+                      className="prose dark:prose-invert max-w-none"
+                      remarkPlugins={[remarkGfm]}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
                   </div>
-               </div>
-             )}
-          </ScrollArea>
-          
-          {/* Input Area (Fixed at the bottom) */}
-          <div className="p-4 border-t dark:border-slate-700 flex items-center flex-shrink-0"> 
-             <input 
-               type="text" 
-               placeholder="Ask a question..." 
-               className="flex-grow p-2 border rounded-l-md focus:outline-none focus:ring-1 focus:ring-primary dark:bg-slate-700 dark:border-slate-600 dark:text-white disabled:opacity-50"
-               value={chatInput}
-               onChange={(e) => setChatInput(e.target.value)}
-               onKeyDown={handleKeyDown} // Handle Enter key
-               disabled={isLoadingChat}
-             />
-             <Button 
-               className="rounded-l-none disabled:opacity-50"
-               onClick={handleSendMessage}
-               disabled={isLoadingChat || !chatInput.trim()}
-             >
-                Send
-             </Button>
+                </div>
+              ))
+            )}
+            {isLoadingChat && (
+              <div className="flex justify-start">
+                <div className="bg-slate-200 dark:bg-slate-700 max-w-[85%] px-4 py-2 rounded-lg dark:text-white">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input Section - IMPROVED FOR MOBILE */}
+          <div className="p-3 md:p-4 border-t dark:border-slate-700">
+            <form onSubmit={handleSendMessage} className="flex flex-col md:flex-row gap-2">
+              <Textarea
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Ask about your documents..."
+                className="flex-grow min-h-[60px] max-h-[120px]"
+              />
+              <Button 
+                type="submit" 
+                disabled={isLoadingChat || chatInput.trim() === ''} 
+                className="md:self-end"
+              >
+                {isLoadingChat ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                <span className="ml-2 md:hidden">Send</span>
+              </Button>
+            </form>
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>

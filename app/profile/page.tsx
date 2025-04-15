@@ -77,17 +77,28 @@ function ProfileContent() {
     };
   }, [isLoadingSubscription, fetchSubscription]);
 
-  // Add useEffect for auth check
+  // Add useEffect for auth check and dashboard redirect
   useEffect(() => {
     if (!user) {
       router.push('/login');
+      return;
     }
-  }, [user, router]);
+
+    // If user has a valid subscription or is in trial, redirect to dashboard
+    if ((!isLoadingSubscription && subscription) || isInTrial) {
+      console.log("User has active subscription or trial, redirecting to dashboard", {
+        subscriptionStatus: subscription?.status,
+        isInTrial
+      });
+      router.push('/dashboard');
+    }
+  }, [user, router, subscription, isLoadingSubscription, isInTrial]);
 
   // Add refresh effect
   useEffect(() => {
     if (user?.id) {
-      fetchSubscription();
+      // Force refresh subscription data when profile loads
+      fetchSubscription(true);
     }
   }, [user?.id, fetchSubscription]);
 

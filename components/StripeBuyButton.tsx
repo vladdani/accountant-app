@@ -24,9 +24,9 @@ export function StripeBuyButton({ buyButtonId, publishableKey, className }: Stri
       if (event.origin !== 'https://js.stripe.com') return;
       
       if (event.data.type === 'buy-button:success') {
-        console.log('Payment successful, redirecting...');
+        console.log('Payment successful, redirecting to dashboard...');
         window.localStorage.setItem('stripe_payment_intent', event.data.payload.paymentIntentId);
-        router.push('/profile?payment=success');
+        router.push('/dashboard');
         router.refresh();
       }
     };
@@ -55,7 +55,7 @@ export function StripeBuyButton({ buyButtonId, publishableKey, className }: Stri
             publishable-key="${publishableKey}"
             client-reference-id="${user.id}"
             customer-email="${user.email}"
-            success-url="${process.env.NEXT_PUBLIC_APP_URL}/profile?payment=success"
+            success-url="${process.env.NEXT_PUBLIC_APP_URL}/dashboard"
             cancel-url="${process.env.NEXT_PUBLIC_APP_URL}/pay?canceled=true"
           >
           </stripe-buy-button>
