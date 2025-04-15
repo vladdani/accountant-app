@@ -175,12 +175,19 @@ export async function handleUserSearchQueryAction(
           toolCallResultContent = { error: `Error processing tool ${toolName}: ${error instanceof Error ? error.message : String(error)}` };
         }
 
-        // Append the tool result message
+        // Append the tool result message with the correct content structure
         toolCallResults.push({
           role: 'tool',
-          content: JSON.stringify(toolCallResultContent),
-          toolCallId: toolCall.toolCallId,
-          toolName: toolName,
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: toolCall.toolCallId,
+              toolName: toolName,
+              result: toolCallResultContent // The actual result object
+            }
+          ],
+          toolCallId: toolCall.toolCallId, // Keep toolCallId here as well for CoreMessage structure
+          // Remove redundant toolName from the top level
         });
       }
 
