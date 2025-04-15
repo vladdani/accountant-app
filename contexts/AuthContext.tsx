@@ -5,8 +5,7 @@ import { supabase } from '@/utils/supabase';
 import { 
   Session, 
   User, 
-  SupabaseClient, 
-  AuthTokenResponse 
+  SupabaseClient
 } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -31,13 +30,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
-
-interface SubscriptionPayload {
-  new: {
-    user_id: string;
-    [key: string]: any;
-  };
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -193,32 +185,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Wait a small amount of time for cleanup
         await new Promise(resolve => setTimeout(resolve, 100));
         
+        // Get current user data before logging out (for redirect)
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        const provider = currentUser?.app_metadata?.provider;
+        
         // Then perform the actual signout
         console.log("Calling supabase.auth.signOut()...");
-        const { error: signOutError } = await supabase.auth.signOut({ scope: 'global' });
+        const { error: signOutError } = await supabase.auth.signOut({ 
+          scope: 'global' 
+        });
         
         if (signOutError) {
           console.error('Supabase signOut error:', signOutError);
-          // Optionally throw the error to be caught below, or handle differently
           throw signOutError; 
         }
-
-        // Clear Google's cookies to force prompt on next login
-        // These are common Google auth cookies that might persist
-        const googleCookies = ['__Secure-1PAPISID', '__Secure-3PAPISID', '__Secure-APISID', 
-                              'SAPISID', 'APISID', 'SSID', 'SID', 'HSID', 'NID'];
         
-        googleCookies.forEach(cookieName => {
-          // Attempt to expire the cookie by setting it to a past date
-          document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.google.com; secure`;
+        // Clear all local storage
+        localStorage.clear();
+        
+        // Clear all session storage
+        sessionStorage.clear();
+        
+        // Clear all cookies from our domain
+        document.cookie.split(";").forEach(cookie => {
+          const [name] = cookie.trim().split("=");
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
         });
 
-        console.log("Supabase signOut successful. Redirecting to /...");
-        // Force redirect to landing page
-        window.location.assign('/'); 
+        console.log("Supabase signOut successful. Redirecting...");
+        
+        // If signed in with Google, redirect through Google's logout page first
+        if (provider === 'google') {
+          const redirectUrl = encodeURIComponent(window.location.origin);
+          // Google's logout URL that redirects back to our site
+          window.location.href = `https://www.google.com/accounts/Logout?continue=https://appengine.google.com/_ah/logout?continue=${redirectUrl}`;
+        } else {
+          // For non-Google auth, just go to the home page
+          window.location.assign('/');
+        }
       } catch (error) {
         console.error('Error during sign out process:', error);
-        // Optionally display an error message to the user here
         alert("Sign out failed. Please check the console."); 
       }
     },
