@@ -177,7 +177,7 @@ export default function Dashboard() {
     } finally {
       setIsLoadingTypes(false);
     }
-  }, [user?.id, supabase]);
+  }, [user?.id]);
 
   const fetchDocuments = useCallback(async () => {
     if (!user?.id) return;
@@ -240,7 +240,7 @@ export default function Dashboard() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  }, [user?.id, selectedFilter, supabase]);
+  }, [user?.id, selectedFilter]);
 
   // --- Data Fetching useEffects ---
 
@@ -708,7 +708,7 @@ export default function Dashboard() {
                       className="prose dark:prose-invert max-w-none"
                       remarkPlugins={[remarkGfm]}
                     >
-                      {message.content}
+                      {typeof message.content === 'string' ? message.content : String(message.content)}
                     </ReactMarkdown>
                   </div>
                 </div>
