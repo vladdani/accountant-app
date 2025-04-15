@@ -325,7 +325,7 @@ export default function Dashboard() {
         // setHasCheckedSubscription(false); 
         console.log("Dashboard mounted/user changed, no user ID found.");
     }
-  }, [user?.id, fetchSubscription]);
+  }, [user?.id]);
 
   // *** REVISED Redirect Effect - Combine checks after loading ***
   useEffect(() => {
