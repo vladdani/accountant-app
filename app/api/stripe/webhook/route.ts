@@ -130,7 +130,7 @@ export const POST = withCors(async function POST(request: NextRequest) {
         // Check for existing active subscription using both customer ID and user ID
         const hasActiveSubscription = await checkExistingSubscription(
           session.customer as string, 
-          session.client_reference_id
+          session.client_reference_id || undefined
         );
         
         if (hasActiveSubscription) {
