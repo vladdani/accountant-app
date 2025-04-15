@@ -96,6 +96,7 @@ export default function Dashboard() {
   const { subscription, isLoading: isSubLoading, fetchSubscription } = useSubscription();
   const { isInTrial, isLoading: isTrialLoading } = useTrialStatus();
   const [uploadStatus, setUploadStatus] = useState<string>(""); 
+  const [isMobile, setIsMobile] = useState<boolean>(false);
   
   // State for document display and filtering
   const [documents, setDocuments] = useState<Document[]>([]); // Use the updated Document interface
@@ -118,21 +119,46 @@ export default function Dashboard() {
   const [isLoadingChat, setIsLoadingChat] = useState<boolean>(false);
   const chatContainerRef = useRef<HTMLDivElement>(null); 
 
+  // Check for mobile screen size
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    // Initial check
+    checkIsMobile();
+    
+    // Add event listener for resize
+    window.addEventListener('resize', checkIsMobile);
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', checkIsMobile);
+  }, []);
+
   // --- Helper Functions for Data Fetching ---
   const fetchTypes = async () => {
     if (!user?.id) return;
     
+    console.log("Starting fetchTypes for user:", user.id);
     setIsLoadingTypes(true);
     try {
+      // Query distinct document types directly from the column
       const { data, error } = await supabase
-        .rpc('get_distinct_document_types', { user_id_param: user.id }); 
+        .from('documents')
+        .select('document_type')
+        .eq('uploaded_by', user.id)
+        .not('document_type', 'is', null);
+
+      console.log("Types fetch result:", { data, error, userId: user.id });
 
       if (error) throw error;
       
-      // Extract the 'document_type' string from each object in the array
-      const typesArray = data?.map((item: { document_type: string }) => item.document_type).filter(Boolean) ?? [];
+      // Get unique document types
+      const typesSet = new Set(data.map(item => item.document_type));
+      const typesArray = Array.from(typesSet);
       
-      setAvailableTypes(typesArray); // Now availableTypes is string[]
+      console.log("Processed document types:", typesArray);
+      setAvailableTypes(typesArray);
     } catch (error) {
       console.error("Error fetching document types:", error);
       setAvailableTypes([]); // Set empty on error
@@ -144,31 +170,56 @@ export default function Dashboard() {
   const fetchDocuments = async () => {
     if (!user?.id) return;
 
+    console.log("Starting fetchDocuments for user:", user.id, "with filter:", selectedFilter);
     setIsLoadingDocuments(true);
     let query = supabase
       .from('documents')
-      .select('id, file_path, document_url, uploaded_at, extracted_data, original_filename')
+      .select('id, file_path, document_url, uploaded_at, original_filename, document_type, document_date, total_amount')
       .eq('uploaded_by', user.id);
 
     // Apply filter logic
     if (selectedFilter.type === 'category') {
-      query = query.eq('extracted_data->>type', selectedFilter.value);
+      query = query.eq('document_type', selectedFilter.value);
+      console.log("Applied category filter:", selectedFilter.value);
     } else if (selectedFilter.type === 'date') {
       // TODO: Implement date filtering logic (e.g., year-month)
+      console.log("Date filtering not yet implemented");
     } else if (selectedFilter.type === 'special') {
       if (selectedFilter.value === 'recent') {
         query = query.order('uploaded_at', { ascending: false }).limit(20);
+        console.log("Applied recent filter (limit 20)");
       } else if (selectedFilter.value === 'starred') {
         // TODO: Add is_starred column or similar logic
+        console.log("Starred filtering not yet implemented");
       } else { // 'all'
         query = query.order('uploaded_at', { ascending: false });
+        console.log("Applied all documents filter (sorted by upload date)");
       }
     } else { // Default to all
        query = query.order('uploaded_at', { ascending: false });
+       console.log("Applied default filter (all docs, sorted by upload date)");
     }
 
     try {
+      console.log("Executing Supabase query...");
       const { data, error } = await query;
+      console.log("Documents query result:", { 
+        count: data?.length || 0, 
+        error, 
+        firstDocument: data && data.length > 0 ? {
+          id: data[0].id,
+          documentType: data[0].document_type,
+          documentDate: data[0].document_date,
+          uploadedAt: data[0].uploaded_at,
+          originalFilename: data[0].original_filename
+        } : null
+      });
+      
+      // Log full data in development only
+      if (process.env.NODE_ENV === 'development') {
+        console.log("Full documents data:", data);
+      }
+      
       if (error) throw error;
       setDocuments(data || []);
     } catch (error) {
@@ -385,7 +436,7 @@ export default function Dashboard() {
   // --- Conditional Returns *AFTER* all hooks ---
   if (isAuthLoading || isTrialLoading) {
      return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="h-screen w-full flex items-center justify-center">
          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
       </div>
     );
@@ -393,60 +444,23 @@ export default function Dashboard() {
 
   // --- Main Component Return --- 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 dark:bg-[#0B1120] overflow-hidden">
-       {/* SINGLE Top Header - REMOVED */}
-       {/* 
-       <header className="flex items-center justify-between p-4 border-b dark:border-slate-700 bg-white dark:bg-neutral-dark sticky top-0 z-10">
-         <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-slate-200 dark:bg-slate-700 rounded-md flex items-center justify-center">
-                <Inbox size={18} className="text-slate-600 dark:text-slate-300"/>
-             </div>
-             <h1 className="text-lg font-semibold text-slate-900 dark:text-white">Digital Storage</h1> 
-         </div>
-         <div className="flex items-center space-x-4">
-            <span className="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded">
-                {isInTrial ? "Trial Period" : (subscription?.status ? subscription.status.charAt(0).toUpperCase() + subscription.status.slice(1) : "No Plan")}
-            </span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                 <Avatar className="h-8 w-8 cursor-pointer">
-                   <AvatarFallback className="bg-primary text-primary-foreground">
-                       {user?.email?.charAt(0).toUpperCase() ?? 'V'}
-                   </AvatarFallback>
-                 </Avatar>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                 <DropdownMenuItem asChild>
-                   <Link href="/profile">Profile & Billing</Link>
-                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleSignOut} className="text-red-600 dark:text-red-400 cursor-pointer focus:bg-red-100 dark:focus:bg-red-900/50 focus:text-red-700 dark:focus:text-red-300">
-                   <LogOut className="mr-2 h-4 w-4" />
-                   <span>Sign Out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-         </div>
-       </header>
-       */}
-
+    <div className="h-screen w-full flex flex-col bg-slate-50 dark:bg-[#0B1120] overflow-hidden">
       {/* Resizable panel group starts immediately */}
-      {/* Ensure the parent div takes full height if header is removed */}
-      <ResizablePanelGroup direction="horizontal" className="flex-grow border-t dark:border-slate-700"> {/* Added border-t */}
-        {/* Left Sidebar - UPDATED */}
-        <ResizablePanel defaultSize={20} minSize={15} maxSize={25} className="bg-white dark:bg-neutral-dark border-r dark:border-slate-700 p-4 flex flex-col">
-           {/* --- REMOVE Upload Button/Component from Sidebar --- */}
-           {/*
-           <FileUpload userId={user?.id} onUploadSuccess={handleUploadSuccess}>
-             <Button className="w-full mb-6">
-               <Upload className="mr-2 h-4 w-4" /> Upload Document
-            </Button>
-          </FileUpload>
-          */}
-          <nav className="flex flex-col space-y-1 overflow-y-auto">
-             <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2 px-2">Main</h3>
+      <ResizablePanelGroup 
+        direction={isMobile ? "vertical" : "horizontal"} 
+        className="w-full h-full flex-grow"
+      > 
+        {/* Left Sidebar - UPDATED with responsive layout */}
+        <ResizablePanel 
+          defaultSize={isMobile ? 15 : 20} 
+          minSize={isMobile ? 10 : 15} 
+          maxSize={isMobile ? 40 : 25} 
+          className="bg-white dark:bg-neutral-dark border-r dark:border-slate-700 p-4 flex flex-col h-full overflow-hidden"
+        >
+          <div className="flex-shrink-0">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2 px-2">Main</h3>
+          </div>
+          <nav className="flex flex-col space-y-1 overflow-y-auto flex-grow">
              <Button 
                 variant={selectedFilter.type === 'special' && selectedFilter.value === 'all' ? "secondary" : "ghost"}
                 className="w-full justify-start"
@@ -495,7 +509,7 @@ export default function Dashboard() {
              {/* <h3 className="text-xs font-semibold text-slate-500 uppercase mt-4 mb-2 px-2">Date</h3> ... */}
              
           </nav>
-          <div className="mt-auto">
+          <div className="mt-auto flex-shrink-0">
             <Link href="/profile" className="flex items-center p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">
                <Settings className="mr-3 h-5 w-5" /> Settings
             </Link>
@@ -503,10 +517,14 @@ export default function Dashboard() {
         </ResizablePanel>
         <ResizableHandle withHandle />
 
-        {/* Center Content Area - UPDATED with Table */}
-        <ResizablePanel defaultSize={55} minSize={40} className="flex flex-col p-6 overflow-hidden">
+        {/* Center Content Area - UPDATED */}
+        <ResizablePanel 
+          defaultSize={isMobile ? 45 : 55} 
+          minSize={isMobile ? 30 : 40} 
+          className="flex flex-col p-4 md:p-6 overflow-hidden h-full"
+        >
           {/* --- RESTORE Integrated Upload Zone --- */}
-          <div className="mb-8 p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-800">
+          <div className="mb-6 p-4 md:p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-800 flex-shrink-0">
              {/* Pass user ID if needed by FileUpload, ensure handleUploadSuccess is defined */}
              <FileUpload onUploadSuccess={handleUploadSuccess} /> 
              {/* Ensure uploadStatus state is defined */}
@@ -516,16 +534,15 @@ export default function Dashboard() {
               </p>
             )}
           </div>
-          {/* --- End RESTORE --- */}
           
           {/* Document Display Area - UPDATED with Table */}
-          <h3 className="text-xl font-semibold mb-4 text-slate-900 dark:text-white capitalize flex-shrink-0">
+          <h3 className="text-lg md:text-xl font-semibold mb-4 text-slate-900 dark:text-white capitalize flex-shrink-0">
              {selectedFilter.type === 'special' ? `${selectedFilter.value} Documents` : selectedFilter.value}
              {isLoadingDocuments ? "" : ` (${documents.length})`}
           </h3>
           
-          {/* Scrollable Table Container */}
-          <div className="flex-grow overflow-y-auto border dark:border-slate-700 rounded-md"> 
+          {/* Scrollable Table Container - Made responsive */}
+          <div className="flex-grow overflow-auto border dark:border-slate-700 rounded-md h-0 min-h-0"> 
             <Table className="min-w-full">
               <TableHeader className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10">
                 <TableRow>
@@ -551,19 +568,13 @@ export default function Dashboard() {
                 ) : documents.length > 0 ? (
                   // Actual Document Rows
                   documents.map((doc) => {
-                    const data = doc.extracted_data;
-                    const docType = (data?.type as string)?.toLowerCase() || 'file';
-                    const docDateStr = data?.date as string || null; // Use null if no extracted date
+                    // Use the dedicated columns instead of extracted_data
+                    const docType = doc.document_type?.toLowerCase() || 'file';
+                    const docDateStr = doc.document_date || null;
                     const uploadedDateStr = doc.uploaded_at;
                     
-                    let friendlyName = '';
-                    if (data && typeof data === 'object') {
-                      // Simplified naming for table view - prioritize original name or derived type/supplier
-                      const supplier = typeof data.supplier === 'string' && data.supplier.trim() ? data.supplier.trim() : null;
-                      const type = typeof data.type === 'string' && data.type.trim() ? data.type.trim() : null;
-                      friendlyName = doc.original_filename || (supplier && type ? `${supplier} - ${type}` : type || supplier || '');
-                    }
-                    const docName = friendlyName || doc.original_filename || doc.file_path.split('/').pop() || 'Document'; 
+                    // Get a friendly name for the document
+                    const docName = doc.original_filename || doc.file_path.split('/').pop() || 'Document'; 
 
                     return (
                       <TableRow key={doc.id}>
@@ -603,20 +614,25 @@ export default function Dashboard() {
         </ResizablePanel>
         <ResizableHandle withHandle />
 
-        {/* Right Chat Panel - Updated Structure */}
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={35} className="bg-white dark:bg-neutral-dark border-l dark:border-slate-700 flex flex-col"> {/* Remove p-4 */}          
+        {/* Right Chat Panel - Updated for responsiveness */}
+        <ResizablePanel 
+          defaultSize={isMobile ? 40 : 25} 
+          minSize={isMobile ? 25 : 20} 
+          maxSize={isMobile ? 60 : 35} 
+          className="bg-white dark:bg-neutral-dark border-l dark:border-slate-700 flex flex-col h-full overflow-hidden"
+        >
           {/* Header (stays the same) */}
-          <div className="p-4 flex-shrink-0"> {/* Add padding back here */}
-            <h3 className="text-lg font-semibold mb-4 text-slate-900 dark:text-white">Semantic Search</h3>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+          <div className="p-4 flex-shrink-0">
+            <h3 className="text-lg font-semibold mb-2 text-slate-900 dark:text-white">Semantic Search</h3>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
               Ask questions about your documents in natural language.
             </p>
           </div>
           
           {/* Scrollable Message Area (Takes up remaining space) */}
-          <ScrollArea className="flex-grow p-4 space-y-4 bg-slate-50 dark:bg-slate-800 border-t border-b dark:border-slate-700" ref={chatContainerRef}> {/* Add borders and background */}
+          <ScrollArea className="flex-grow px-4 py-2 space-y-4 bg-slate-50 dark:bg-slate-800 border-t border-b dark:border-slate-700 h-0 min-h-0" ref={chatContainerRef}>
             {chatMessages.map((message) => (
-              <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`}>
                 <div className={`p-3 rounded-lg max-w-[80%] ${message.role === 'user' 
                   ? 'bg-primary text-primary-foreground' 
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200'
@@ -633,7 +649,7 @@ export default function Dashboard() {
             ))}
              {/* Loading Indicator */}
              {isLoadingChat && (
-               <div className="flex justify-start">
+               <div className="flex justify-start mb-4">
                   <div className="p-3 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
                     <Skeleton className="h-4 w-20" />
                   </div>
@@ -642,7 +658,7 @@ export default function Dashboard() {
           </ScrollArea>
           
           {/* Input Area (Fixed at the bottom) */}
-          <div className="p-4 border-t dark:border-slate-700 flex items-center flex-shrink-0"> {/* Add flex-shrink-0 */} 
+          <div className="p-4 border-t dark:border-slate-700 flex items-center flex-shrink-0"> 
              <input 
                type="text" 
                placeholder="Ask a question..." 
