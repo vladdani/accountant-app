@@ -704,12 +704,13 @@ export default function Dashboard() {
                         : 'bg-slate-200 dark:bg-slate-700 dark:text-white'
                     }`}
                   >
-                    <ReactMarkdown
-                      className="prose dark:prose-invert max-w-none"
-                      remarkPlugins={[remarkGfm]}
-                    >
-                      {typeof message.content === 'string' ? message.content : String(message.content)}
-                    </ReactMarkdown>
+                    <div className="prose dark:prose-invert max-w-none">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                      >
+                        {typeof message.content === 'string' ? message.content : String(message.content)}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                 </div>
               ))
