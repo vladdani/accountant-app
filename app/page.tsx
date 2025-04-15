@@ -23,11 +23,12 @@ import {
 import { useScroll, useTransform } from "framer-motion";
 // import { Link as ScrollLink } from 'react-scroll';
 // import { VideoModal } from '@/components/VideoModal';
-import Hero from "@/components/landing/hero";
+import { Hero } from "@/components/ui/animated-hero";
 import { KeyFeatures } from "@/components/landing/key-features";
+import { Pricing } from "@/components/blocks/pricing";
 import Testimonials from "@/components/landing/testimonials";
 import { Faq } from "@/components/landing/faq";
-import { Footer } from "@/components/footer";
+import { Footerdemo } from "@/components/ui/footer-section";
 import { Suspense } from "react";
 import PostHogPageView from "@/components/PostHogPageView";
 
@@ -181,6 +182,58 @@ const featureCards = [
   }
 ];
 
+// Define the pricing plans data
+const pricingPlans = [
+  {
+    name: "Starter",
+    price: "450000", // Price as string for formatting
+    yearlyPrice: "0", // Not used, but needed by interface
+    period: "per month",
+    features: [
+      "Limited storage (5Gb)",
+      "Slower AI model",
+      "72-hour support response time",
+    ],
+    description: "Micro Company",
+    buttonText: "Get Started", // Or choose appropriate text
+    href: "https://buy.stripe.com/00g9BO0rUdVz3C028b", // Update link
+    isPopular: false,
+  },
+  {
+    name: "Professional",
+    price: "890000",
+    yearlyPrice: "0",
+    period: "per month",
+    features: [
+      "Unlimited storage",
+      "Fast AI model",
+      "12-hour support response time",
+      "Exports",
+    ],
+    description: "Small Business",
+    buttonText: "Get Started",
+    href: "https://buy.stripe.com/4gwdS4fmO18Na0o9AE", // Update link
+    isPopular: true, // Make this popular
+  },
+  {
+    name: "Enterprise",
+    price: "Contact Sales", // Special case for display
+    yearlyPrice: "0",
+    period: "", // No period needed
+    features: [
+      "Unlimited storage",
+      "Fast AI model",
+      "Dedicated support",
+      "Exports",
+      "Custom Integrations",
+    ],
+    description: "Enterprise",
+    buttonText: "Contact Sales",
+    href: "/contact", // Link to contact page
+    isPopular: false,
+  },
+];
+
 export default function LandingPage() {
   const { user } = useAuth();
   const { isInTrial } = useTrialStatus();
@@ -204,10 +257,11 @@ export default function LandingPage() {
       <main className="flex-1">
         <Hero />
         <KeyFeatures />
+        <Pricing plans={pricingPlans} />
         <Testimonials />
         <Faq />
       </main>
-      <Footer />
+      <Footerdemo />
     </Suspense>
   );
 }

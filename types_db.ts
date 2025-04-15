@@ -23,8 +23,6 @@ export interface Database {
           document_url: string | null
           content: string | null
           uploaded_at: string
-          embedding: Json | null
-          extracted_data: Json | null
           original_filename: string | null
           content_tokens: number | null
           vendor: string | null
@@ -40,8 +38,6 @@ export interface Database {
           document_url?: string | null
           content?: string | null
           uploaded_at?: string
-          embedding?: Json | null
-          extracted_data?: Json | null
           original_filename?: string | null
           content_tokens?: number | null
           vendor?: string | null
@@ -57,8 +53,6 @@ export interface Database {
           document_url?: string | null
           content?: string | null
           uploaded_at?: string
-          embedding?: Json | null
-          extracted_data?: Json | null
           original_filename?: string | null
           content_tokens?: number | null
           vendor?: string | null

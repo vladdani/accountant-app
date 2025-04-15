@@ -13,10 +13,10 @@ PLUS
 
 Thin Flutter Mobile App (Android)
 • Primarily optimized for WhatsApp workflow (forward/share files directly).
-• Native share extension (“share to your app”) for instant file upload.
+• Native share extension ("share to your app") for instant file upload.
 • Offers ultra-convenient mobile experience for frequent daily use.
 
-This “hybrid” approach gives you maximum efficiency:
+This "hybrid" approach gives you maximum efficiency:
 • Web App covers desktops and occasional mobile web use (fast dev, low-cost maintenance).
 • Flutter App for dedicated mobile convenience and WhatsApp integration.
 
@@ -47,7 +47,7 @@ Mobile Flutter App (Lightweight):
 
 🚀 Cursor AI Instructions (Ready to Paste)
 
-Use the following clear instructions to build an MVP web app named “Digital Archive App”:
+Use the following clear instructions to build an MVP web app named "Digital Archive App":
 
 ⸻
 
@@ -127,7 +127,7 @@ Create Supabase Table: "transactions":
 - type (invoice/receipt/other)
 - uploaded_by (user UUID)
 
-You’re right to be concerned. Let’s clearly address these two critical challenges and provide robust solutions that integrate well into your MVP.
+You're right to be concerned. Let's clearly address these two critical challenges and provide robust solutions that integrate well into your MVP.
 
 ⸻
 
@@ -150,7 +150,6 @@ type TEXT NOT NULL, -- invoice, agreement, receipt, etc.
 date DATE, -- common across most docs
 supplier TEXT,
 document_url TEXT NOT NULL,
-extracted_data JSONB, -- Flexible, stores varying fields per doc type
 uploaded_at TIMESTAMP DEFAULT now(),
 uploaded_by UUID REFERENCES auth.users (id)
 );
@@ -193,34 +192,6 @@ Users may query in either English or Indonesian. Your search functionality must 
 ✅ Recommended Solution: Multilingual Semantic Search using Embeddings
 
 Implement AI-driven semantic search (vector embeddings) that inherently understands multilingual contexts.
-
-Technical Implementation (Clear steps): 1. Embedding Generation:
-• For each uploaded document:
-• Extract raw text (via Gemini API).
-• Generate multilingual embeddings using Google’s Gemini multilingual models or OpenAI’s multilingual embeddings (text-embedding-3-large, Gemini embedding API). 2. Store embeddings efficiently (PGVector in Supabase):
-
-ALTER TABLE documents ADD COLUMN embedding vector(1536);
-
-    3.	Query Execution Flow:
-    •	User inputs query (in Indonesian or English).
-    •	Generate embedding of user query.
-    •	Execute semantic similarity search on embeddings using PGVector.
-
-Example query (user types either language):
-
-User query (Indonesian): "tampilkan invoice dengan nilai lebih dari 10 juta Januari 2025"
-User query (English): "show invoices above 10 million from January 2025"
-
-Supabase vector query example (fast and accurate multilingual search):
-
-SELECT id, type, date, supplier, document_url
-FROM documents
-ORDER BY embedding <-> '[user_query_embedding]'::vector LIMIT 10;
-
-Why this works effectively:
-• Embeddings inherently represent multilingual meaning.
-• No explicit language detection or complex NLP pipeline needed.
-• Blazing fast queries with vector similarity search in PGVector.
 
 ⸻
 

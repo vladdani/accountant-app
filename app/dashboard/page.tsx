@@ -76,7 +76,6 @@ interface Document {
   file_path: string; // Path in storage
   document_url: string; // Public URL
   uploaded_at: string;
-  extracted_data?: Record<string, unknown> | null; // Make this optional with ?
   original_filename: string | null;
   // Add new columns from updated schema
   document_type?: string | null;
@@ -599,7 +598,7 @@ export default function Dashboard() {
                 <TableRow>
                   <TableHead className="w-[40%]">Name</TableHead>
                   <TableHead>Type</TableHead>
-                  <TableHead>Extracted Date</TableHead>
+                  <TableHead>Date</TableHead>
                   <TableHead>Added</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
