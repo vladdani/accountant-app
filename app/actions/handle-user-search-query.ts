@@ -82,7 +82,8 @@ export async function handleUserSearchQueryAction(
   // --- Authentication (REMOVE Bypass Logic) ---
   let currentUserId: string | null = null;
   try { 
-      const cookieStore = cookies();
+      // Await the cookies() call here
+      const cookieStore = await cookies(); 
       const supabase = createServerClient( 
         supabaseUrl!, 
         supabaseAnonKey!, 
