@@ -57,14 +57,15 @@ export function useTrialStatus() {
             trialEndTime: trial.trial_end_time
           });
         } else {
-          // Create new trial for user
+          // Create new trial for user - set it to start now and last 48 hours
           const trialEndTime = new Date();
-          trialEndTime.setHours(trialEndTime.getHours() + 48);
+          trialEndTime.setHours(trialEndTime.getHours() + 48); // 48 hour trial
 
           const { data: newTrial, error: insertError } = await supabase
             .from('user_trials')
-            .upsert({ // Use upsert instead of insert to handle duplicates
+            .upsert({
               user_id: user.id,
+              trial_start_time: new Date().toISOString(),
               trial_end_time: trialEndTime.toISOString(),
               is_trial_used: false
             })
@@ -73,6 +74,8 @@ export function useTrialStatus() {
 
           if (insertError) throw insertError;
 
+          console.log('Created new trial for user:', user.id, 'ending at:', trialEndTime);
+          
           setTrialStatus({
             isInTrial: true,
             trialEndTime: newTrial.trial_end_time

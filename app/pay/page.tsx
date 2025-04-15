@@ -64,17 +64,42 @@ export default function PaymentPage() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] p-4">
-      <h1 className="text-xl md:text-2xl font-bold mb-6 text-center">Complete Your Purchase</h1>
+      <h1 className="text-xl md:text-2xl font-bold mb-6 text-center">Subscription Status</h1>
+      
+      <div className="w-full max-w-md mb-8">
+        <div className="bg-card rounded-xl shadow-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">Basic Plan</h2>
+          <div className="text-3xl font-bold mb-2">7 days free</div>
+          <p className="text-muted-foreground mb-4">Then $9 per month</p>
+          
+          <ul className="mb-6 space-y-2">
+            <li className="flex items-center">
+              <svg className="h-5 w-5 text-green-500 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 13l4 4L19 7"></path></svg>
+              Unlimited document processing
+            </li>
+            <li className="flex items-center">
+              <svg className="h-5 w-5 text-green-500 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 13l4 4L19 7"></path></svg>
+              AI-powered analysis
+            </li>
+            <li className="flex items-center">
+              <svg className="h-5 w-5 text-green-500 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor"><path d="M5 13l4 4L19 7"></path></svg>
+              Premium support
+            </li>
+          </ul>
+          
+          <StripeBuyButton
+            className="w-full"
+            buyButtonId={process.env.NEXT_PUBLIC_STRIPE_BUTTON_ID || ''}
+            publishableKey={process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''}
+          />
+          
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            Cancel anytime. No long-term commitment.
+          </div>
+        </div>
+      </div>
       
       <SubscriptionStatus />
-
-      <div className="w-full max-w-md px-4">
-        <StripeBuyButton
-          className="flex justify-center text-neutral"
-          buyButtonId={process.env.NEXT_PUBLIC_STRIPE_BUTTON_ID || ''}
-          publishableKey={process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''}
-        />
-      </div>
     </div>
   );
 }
