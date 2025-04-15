@@ -17,12 +17,22 @@ const acceptedFileTypes: Accept = {
   'image/heif': ['.heif'], // Often associated with HEIC
 };
 
-interface FileUploadProps {
-  onUploadSuccess?: (uploadedUrl: string) => void; // Callback on successful upload
-  // Add other props like userId if needed for upload path
+// Define the structure for the upload result object
+interface UploadResult {
+  success: boolean;
+  url?: string;
+  filePath?: string; 
+  dbRecordId?: string; 
+  error?: string;
+  duplicateOf?: { id: string; name: string | null };
 }
 
-export function FileUpload({ onUploadSuccess }: FileUploadProps) {
+interface FileUploadProps {
+  // Update the callback prop type to accept the full result
+  onUploadComplete?: (result: UploadResult) => void; 
+}
+
+export function FileUpload({ onUploadComplete }: FileUploadProps) {
   const [acceptedFiles, setAcceptedFiles] = useState<File[]>([]);
   const [rejectedFiles, setRejectedFiles] = useState<FileRejection[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -45,48 +55,65 @@ export function FileUpload({ onUploadSuccess }: FileUploadProps) {
           try {
             const formData = new FormData();
             formData.append('file', fileToUpload);
-            const result = await uploadFile(formData); // Call the action for each file
+            const result = await uploadFile(formData); // result is now UploadResult
 
-            if (result.success) {
-              console.log('Upload Action Success:', fileToUpload.name, result.url ? `URL: ${result.url}` : '(No public URL returned)');
-              if (onUploadSuccess && result.url) {
-                onUploadSuccess(result.url);
-              }
-              // Remove successfully processed file from the accepted list
-              setAcceptedFiles(prev => prev.filter(f => f !== fileToUpload));
-              return { success: true, file: fileToUpload.name };
-            } else {
-              throw new Error(result.error || `Upload action failed for ${fileToUpload.name}`);
+            // Call the new callback with the full result
+            if (onUploadComplete) {
+              onUploadComplete(result);
             }
+            
+            // Remove file from list only if the upload action didn't detect a duplicate or other non-success
+            // We rely on the dashboard handler to show appropriate status messages
+            if (result.success) {
+                 setAcceptedFiles(prev => prev.filter(f => f !== fileToUpload));
+                 return { success: true, file: fileToUpload.name };
+            } else if (result.duplicateOf) {
+                 setAcceptedFiles(prev => prev.filter(f => f !== fileToUpload));
+                 return { success: false, file: fileToUpload.name, duplicate: true }; // Indicate duplicate
+            } else {
+                 // Keep the file in accepted list for potential retry?
+                 // Or move to a new "failed" list?
+                 // For now, just log error and return failure status
+                 console.error(`Upload action failed for ${fileToUpload.name}:`, result.error);
+                 return { success: false, file: fileToUpload.name, error: result.error };
+            }
+            
           } catch (error) {
+            // Catch errors from the uploadFile action itself (network, etc.)
             console.error(`Upload failed for ${fileToUpload.name}:`, error);
             const message = error instanceof Error ? error.message : 'File upload failed.';
-            // Keep failed file in rejected list? Or add specific error state?
-            // For now, we remove from accepted and rely on a general error message.
-            setAcceptedFiles(prev => prev.filter(f => f !== fileToUpload));
+            
+            // Call callback with error status
+            if (onUploadComplete) {
+                 onUploadComplete({ success: false, error: message });
+            }
+            
+            // Keep file in acceptedFiles for now, let user decide to remove/retry
             return { success: false, file: fileToUpload.name, error: message };
           }
         });
 
         // Wait for all uploads to attempt completion
         const results = await Promise.all(uploadPromises);
-        const failedUploads = results.filter(r => !r.success);
+        
+        // Aggregate results for final status message (optional, can rely on individual callbacks)
+        const failedUploads = results.filter(r => !r.success && !r.duplicate); // Exclude duplicates from error count
+        const duplicateUploads = results.filter(r => r.duplicate);
 
         if (failedUploads.length > 0) {
-          setUploadError(`Failed to upload ${failedUploads.length} file(s). Check rejected list or console.`);
-          // Add failed files to rejected list for display
-          // This requires mapping results back to original FileRejection format if desired
-          // For simplicity, we just show a general error message for now.
-          console.error("Failed uploads:", failedUploads);
-        } else {
-          setUploadError(null); // Clear error if all succeed
+          setUploadError(`Failed to upload ${failedUploads.length} file(s). Check console.`);
+        } else if (duplicateUploads.length > 0 && acceptedFiles.length === 0) { 
+             // If only duplicates were uploaded, clear generic error
+             setUploadError(null);
+        } else if (failedUploads.length === 0 && duplicateUploads.length === 0) {
+             setUploadError(null); // Clear error if all succeed
         }
         
         setIsUploading(false);
         console.log("Finished processing batch.");
       }
     },
-    [onUploadSuccess]
+    [onUploadComplete]
   );
 
   const { getRootProps, getInputProps, isDragActive, isFocused, isDragAccept, isDragReject } = useDropzone({

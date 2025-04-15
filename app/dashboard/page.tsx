@@ -382,17 +382,37 @@ export default function Dashboard() {
   }, [chatMessages]);
 
   // --- Helper Functions --- 
-  const handleUploadSuccess = (url: string) => {
-    console.log("Upload successful on dashboard:", url);
-    setUploadStatus(`File uploaded successfully! Processing...`);
-    // Refresh documents and types after upload (with a small delay for processing)
-    setTimeout(() => {
-       setSelectedFilter(prev => ({ ...prev })); // Trigger refetch by changing filter state slightly
-       // TODO: Add refetch logic for types as well
-    }, 3000); 
-    setTimeout(() => setUploadStatus(""), 5000); 
-    fetchDocuments(); // Refresh documents after upload
-    fetchTypes(); // Refresh types after upload
+  const handleUploadSuccess = (result: { 
+    success: boolean; 
+    url?: string; 
+    error?: string; 
+    duplicateOf?: { id: string; name: string | null };
+  }) => {
+    if (result.success && result.url) {
+      console.log("Upload successful on dashboard:", result.url);
+      setUploadStatus(`File uploaded successfully! Processing...`);
+      // Refresh documents and types after upload (with a small delay for processing)
+      setTimeout(() => {
+         setSelectedFilter(prev => ({ ...prev })); // Trigger refetch by changing filter state slightly
+         // TODO: Add refetch logic for types as well
+      }, 3000); 
+      setTimeout(() => setUploadStatus(""), 5000); 
+      fetchDocuments(); // Refresh documents after upload
+      fetchTypes(); // Refresh types after upload
+    } else if (result.duplicateOf) {
+      // Handle duplicate case
+      console.warn("Duplicate file detected:", result.duplicateOf);
+      const duplicateName = result.duplicateOf.name || 'an existing document';
+      setUploadStatus(`File already exists: ${duplicateName}.`);
+      // Optionally, highlight the existing document or navigate to it
+      setTimeout(() => setUploadStatus(""), 5000); 
+    } else {
+      // Handle generic upload error
+      console.error("Upload failed on dashboard:", result.error);
+      setUploadStatus(`Error: ${result.error || 'Failed to upload file. Check console.'}`);
+      // Optionally, show error for longer
+      setTimeout(() => setUploadStatus(""), 7000);
+    }
   };
 
   const handleFilterChange = (newFilter: Filter) => {
@@ -575,11 +595,12 @@ export default function Dashboard() {
         >
           {/* --- RESTORE Integrated Upload Zone --- */}
           <div className="mb-6 p-4 md:p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-800 flex-shrink-0">
-             {/* Pass user ID if needed by FileUpload, ensure handleUploadSuccess is defined */}
-             <FileUpload onUploadSuccess={handleUploadSuccess} /> 
+             {/* Update prop name from onUploadSuccess to onUploadComplete */}
+             <FileUpload onUploadComplete={handleUploadSuccess} /> 
              {/* Ensure uploadStatus state is defined */}
              {uploadStatus && ( 
-              <p className="mt-4 text-sm text-green-600 dark:text-green-400">
+              // Make duplicate message yellow/warning color
+              <p className={`mt-4 text-sm font-medium ${uploadStatus.startsWith('File already exists') ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
                  {uploadStatus}
               </p>
             )}
@@ -587,7 +608,7 @@ export default function Dashboard() {
           
           {/* Document Display Area - UPDATED with Table */}
           <h3 className="text-lg md:text-xl font-semibold mb-4 text-slate-900 dark:text-white capitalize flex-shrink-0">
-             {selectedFilter.type === 'special' ? `${selectedFilter.value} Documents` : selectedFilter.value}
+             {selectedFilter.type === 'special' ? `Document Explorer - ${selectedFilter.value}` : `Document Explorer - ${selectedFilter.value}`}
              {isLoadingDocuments ? "" : ` (${documents.length})`}
           </h3>
           

@@ -31,6 +31,7 @@ interface UploadResult {
   filePath?: string; 
   dbRecordId?: string; 
   error?: string;
+  duplicateOf?: { id: string; name: string | null };
 }
 
 interface AiExtractionResult { // Define expected AI response structure
@@ -116,7 +117,10 @@ export async function uploadFile(formData: FormData): Promise<UploadResult> {
       console.warn(`Duplicate detected! Existing doc ID: ${existingDoc.id}, Filename: ${existingDoc.original_filename}`);
       return {
         success: false,
-        error: `This file appears to be a duplicate of '${existingDoc.original_filename || 'an existing document'}'.`
+        duplicateOf: { 
+          id: existingDoc.id, 
+          name: existingDoc.original_filename 
+        } 
       };
     }
     console.log("No duplicate found. Proceeding with upload.");
