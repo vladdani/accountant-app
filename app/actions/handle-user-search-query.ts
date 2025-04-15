@@ -169,26 +169,26 @@ export async function handleUserSearchQueryAction(
         // Append the tool result message with the correct content structure
         toolCallResults.push({
           role: 'tool',
-          content: [
-            {
-              type: 'tool-result',
-              toolCallId: toolCall.toolCallId,
-              toolName: toolName,
-              result: toolCallResultContent // The actual result object
+          content: [ // Content IS an array here
+            { 
+              type: 'tool-result', // Specify the type
+              toolCallId: toolCall.toolCallId, // Include toolCallId inside
+              toolName: toolName, // Add toolName here
+              result: toolCallResultContent // The result object (not stringified)
             }
           ]
-          // Remove toolCallId from the top level, it only belongs inside the content array
         });
       }
 
-      // Append the AI's message and the tool results to the history
-      // result.message doesn't exist in the generateText result when using tools
-      // Create an assistant message manually with the result.text
-      messages.push({
+      // Append the AI's text response and the tool results
+      messages.push({ // Create assistant message manually
         role: 'assistant',
-        content: result.text || 'I need to use a tool to answer your question.'
+        content: result.text || '' // Use the text response
       });
-      messages.push(...toolCallResults);
+      messages.push(...toolCallResults); // Add the tool results separately
+      
+      // Remove the incorrect attempt to push result.message
+      // messages.push(result.message); 
 
       console.log("--- Sending to AI (Next Call with Tool Results) ---");
       console.log(JSON.stringify(messages, null, 2));
