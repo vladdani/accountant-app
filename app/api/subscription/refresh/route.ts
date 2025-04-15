@@ -20,12 +20,12 @@ export async function POST() {
     // This will indicate to clients that they need to refresh their data
     const refreshTimestamp = new Date().toISOString();
     
-    // Update the user's subscription_last_updated field
+    // Update the user's updated_at field
     const { error: updateError } = await supabase
       .from('user_preferences')
       .upsert({
         user_id: user.id,
-        subscription_last_updated: refreshTimestamp
+        updated_at: refreshTimestamp
       }, {
         onConflict: 'user_id'
       });

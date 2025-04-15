@@ -40,10 +40,10 @@ export function useSubscription() {
   // Add a function to check if the server has updates
   const checkServerUpdates = useCallback(async (userId: string, lastChecked: number): Promise<boolean> => {
     try {
-      // Check user_preferences table for subscription_last_updated
+      // Check user_preferences table for updated_at
       const { data, error } = await supabase
         .from('user_preferences')
-        .select('subscription_last_updated')
+        .select('updated_at')
         .eq('user_id', userId)
         .single();
       
@@ -53,12 +53,12 @@ export function useSubscription() {
       }
       
       // If server has no timestamp or client has no lastChecked, force update
-      if (!data?.subscription_last_updated || !lastChecked) {
+      if (!data?.updated_at || !lastChecked) {
         return true;
       }
       
       // Compare timestamps (server timestamp vs last client check)
-      const serverUpdatedAt = new Date(data.subscription_last_updated).getTime();
+      const serverUpdatedAt = new Date(data.updated_at).getTime();
       return serverUpdatedAt > lastChecked;
     } catch (err) {
       console.error('Failed to check for subscription updates:', err);
