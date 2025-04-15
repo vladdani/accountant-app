@@ -1,7 +1,7 @@
 "use client";
 
 // import { useWebSocket } from '@/contexts/WebSocketContext';
-import { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { PostgrestError } from '@supabase/supabase-js';
@@ -76,7 +76,7 @@ interface Document {
 interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'tool'; // Add 'tool' role if you plan to display tool interactions
-  content: string | JSX.Element;
+  content: string | React.ReactNode;
   timestamp: string; // Keep timestamp for display
   // Optional: tool_calls, tool_call_id if needed for rendering
 }
@@ -329,7 +329,7 @@ export default function Dashboard() {
         chatHistory: historyForAI.slice(0, -1), // Send history *before* the latest user message
       });
 
-      let assistantMessageContent: string | JSX.Element;
+      let assistantMessageContent: string | React.ReactNode;
       if (result.success && result.response) {
         assistantMessageContent = result.response;
       } else {
