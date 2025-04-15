@@ -191,7 +191,12 @@ export async function handleUserSearchQueryAction(
       }
 
       // Append the AI's message and the tool results to the history
-      messages.push(result.message);
+      // result.message doesn't exist in the generateText result when using tools
+      // Create an assistant message manually with the result.text
+      messages.push({
+        role: 'assistant',
+        content: result.text || 'I need to use a tool to answer your question.'
+      });
       messages.push(...toolCallResults);
 
       console.log("--- Sending to AI (Next Call with Tool Results) ---");
