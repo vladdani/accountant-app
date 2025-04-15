@@ -134,11 +134,13 @@ export function useSubscription() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, supabase, lastCheckedTimestamp, checkServerUpdates]);
+  }, [user?.id, supabase, checkServerUpdates]);
 
   useEffect(() => {
-    fetchSubscription();
-  }, [fetchSubscription]);
+    if (user?.id) {
+      fetchSubscription();
+    }
+  }, [user?.id]);
 
   const checkValidSubscription = useCallback((data: Subscription[]): boolean => {
     return data.some(sub => 
