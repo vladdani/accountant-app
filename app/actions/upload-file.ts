@@ -244,7 +244,9 @@ export async function uploadFile(formData: FormData): Promise<UploadResult> {
         let extractedData: AiExtractionResult | null = null;
         try {
             // Attempt to extract JSON object using match
-            const match = extractedJsonString.match(/\{.*\}/s); // Find first { to last } (s flag for multiline)
+            // Replace the 's' flag (which requires ES2018) with a more compatible approach
+            // that still matches across multiple lines
+            const match = extractedJsonString.match(/\{[\s\S]*\}/); // [\s\S] matches any character including newlines
             if (match && match[0]) {
                 const jsonObjectString = match[0];
                 const parsed = JSON.parse(jsonObjectString); // Parse only the matched object
