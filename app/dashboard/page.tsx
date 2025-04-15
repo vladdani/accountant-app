@@ -136,7 +136,7 @@ export default function Dashboard() {
         if (error) throw error;
         
         // FIX: Extract the 'document_type' string from each object in the array
-        const typesArray = data?.map(item => item.document_type).filter(Boolean) ?? [];
+        const typesArray = data?.map((item: { document_type: string }) => item.document_type).filter(Boolean) ?? [];
         
         setAvailableTypes(typesArray as string[]); // Now availableTypes is string[]
       } catch (error) {
