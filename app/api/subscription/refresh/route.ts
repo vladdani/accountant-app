@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { clearSubscriptionCache } from '@/hooks/useSubscription';
 
 export async function POST() {
   try {
@@ -17,8 +16,24 @@ export async function POST() {
       );
     }
     
-    // Clear the subscription cache for this user
-    const cacheCleared = clearSubscriptionCache(user.id);
+    // Instead of clearing the client-side cache, update a timestamp in the database
+    // This will indicate to clients that they need to refresh their data
+    const refreshTimestamp = new Date().toISOString();
+    
+    // Update the user's subscription_last_updated field
+    const { error: updateError } = await supabase
+      .from('user_preferences')
+      .upsert({
+        user_id: user.id,
+        subscription_last_updated: refreshTimestamp
+      }, {
+        onConflict: 'user_id'
+      });
+    
+    if (updateError) {
+      console.error('Error updating refresh timestamp:', updateError);
+      // Continue anyway, as this is just an optimization
+    }
     
     // Fetch the latest subscription data directly from the database
     const { data: subscriptionData, error: subscriptionError } = await supabase
@@ -39,7 +54,8 @@ export async function POST() {
     // Return success with subscription data
     return NextResponse.json({
       success: true,
-      cacheCleared,
+      refreshed: true, // Instead of cacheCleared
+      refreshTimestamp,
       subscription: subscriptionData,
       hasActiveSubscription: !!subscriptionData && ['active', 'trialing'].includes(subscriptionData.status)
     });

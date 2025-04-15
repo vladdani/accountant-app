@@ -77,22 +77,25 @@ function ProfileContent() {
     };
   }, [isLoadingSubscription, fetchSubscription]);
 
-  // Add useEffect for auth check and dashboard redirect
+  // Modify the useEffect that does the redirect
   useEffect(() => {
     if (!user) {
       router.push('/login');
       return;
     }
 
-    // If user has a valid subscription or is in trial, redirect to dashboard
-    if ((!isLoadingSubscription && subscription) || isInTrial) {
-      console.log("User has active subscription or trial, redirecting to dashboard", {
-        subscriptionStatus: subscription?.status,
-        isInTrial
-      });
-      router.push('/dashboard');
-    }
-  }, [user, router, subscription, isLoadingSubscription, isInTrial]);
+    // Remove the automatic redirect to dashboard
+    // The profile page should be accessible by users with active subscriptions
+    // Only redirect unauthenticated users
+
+    // if ((!isLoadingSubscription && subscription) || isInTrial) {
+    //   console.log("User has active subscription or trial, redirecting to dashboard", {
+    //     subscriptionStatus: subscription?.status,
+    //     isInTrial
+    //   });
+    //   router.push('/dashboard');
+    // }
+  }, [user, router]);
 
   // Add refresh effect
   useEffect(() => {
@@ -237,29 +240,45 @@ function ProfileContent() {
 
                 if (isInTrial && endTime && now < endTime) {
                   return (
-                    <p className="text-green-600 dark:text-green-400">
-                      You are currently in your trial period. Your trial will end on {' '}
-                      {endTime.toLocaleDateString()}.
-                    </p>
+                    <>
+                      <p className="text-green-600 dark:text-green-400 mb-4">
+                        You are currently in your trial period. Your trial will end on {' '}
+                        {endTime.toLocaleDateString()}.
+                      </p>
+                      <p className="mb-4">Subscribe now to ensure continued access after your trial ends:</p>
+                      <StripeBuyButton
+                        buyButtonId={process.env.NEXT_PUBLIC_STRIPE_BUTTON_ID || ''}
+                        publishableKey={process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''}
+                      />
+                    </>
                   );
                 } else if (trialHasEnded) {
                   return (
-                    <div className="p-4 bg-red-50 dark:bg-red-900/30 rounded-lg mb-4">
-                      <p className="text-red-600 dark:text-red-400">
-                        Your trial period ended on {endTime.toLocaleDateString()}.
-                      </p>
-                      <p className="mt-2">Subscribe now to regain access.</p>
-                    </div>
+                    <>
+                      <div className="p-4 bg-red-50 dark:bg-red-900/30 rounded-lg mb-4">
+                        <p className="text-red-600 dark:text-red-400">
+                          Your trial period ended on {endTime?.toLocaleDateString()}.
+                        </p>
+                        <p className="mt-2">Subscribe now to regain access.</p>
+                      </div>
+                      <StripeBuyButton
+                        buyButtonId={process.env.NEXT_PUBLIC_STRIPE_BUTTON_ID || ''}
+                        publishableKey={process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''}
+                      />
+                    </>
                   );
                 } else {
-                  return <p>Subscribe to unlock the amazing features.</p>;
+                  return (
+                    <>
+                      <p className="mb-4">Subscribe to unlock the amazing features.</p>
+                      <StripeBuyButton
+                        buyButtonId={process.env.NEXT_PUBLIC_STRIPE_BUTTON_ID || ''}
+                        publishableKey={process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''}
+                      />
+                    </>
+                  );
                 }
               })()}
-              
-              <StripeBuyButton
-                buyButtonId={process.env.NEXT_PUBLIC_STRIPE_BUTTON_ID || ''}
-                publishableKey={process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || ''}
-              />
             </div>
           )}
         </div>

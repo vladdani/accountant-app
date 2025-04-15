@@ -35,6 +35,36 @@ export function useSubscription() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastCheckedTimestamp, setLastCheckedTimestamp] = useState<number>(0);
+
+  // Add a function to check if the server has updates
+  const checkServerUpdates = useCallback(async (userId: string, lastChecked: number): Promise<boolean> => {
+    try {
+      // Check user_preferences table for subscription_last_updated
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .select('subscription_last_updated')
+        .eq('user_id', userId)
+        .single();
+      
+      if (error) {
+        console.error('Error checking for subscription updates:', error);
+        return false;
+      }
+      
+      // If server has no timestamp or client has no lastChecked, force update
+      if (!data?.subscription_last_updated || !lastChecked) {
+        return true;
+      }
+      
+      // Compare timestamps (server timestamp vs last client check)
+      const serverUpdatedAt = new Date(data.subscription_last_updated).getTime();
+      return serverUpdatedAt > lastChecked;
+    } catch (err) {
+      console.error('Failed to check for subscription updates:', err);
+      return false; // On error, default to false (no updates)
+    }
+  }, [supabase]);
 
   const fetchSubscription = useCallback(async (skipCache = false) => {
     if (!user?.id) {
@@ -49,9 +79,23 @@ export function useSubscription() {
     
     if (cached && (now - cached.timestamp < CACHE_DURATION)) {
       console.log("Using cached subscription data");
-      setSubscription(cached.data);
-      setLoading(false);
-      return;
+      
+      // Even if using cached data, check if server has updates
+      try {
+        const hasServerUpdates = await checkServerUpdates(user.id, lastCheckedTimestamp);
+        if (hasServerUpdates) {
+          console.log("Server has subscription updates, fetching fresh data");
+          // Continue to fetch fresh data
+        } else {
+          // No updates, use cache
+          setSubscription(cached.data);
+          setLoading(false);
+          return;
+        }
+      } catch (error) {
+        console.error("Error checking for subscription updates:", error);
+        // Continue to fetch anyway on error
+      }
     }
 
     console.log("Fetching fresh subscription data from database");
@@ -74,11 +118,12 @@ export function useSubscription() {
 
       const result = isValid ? data : null;
       
-      // Update cache
+      // Update cache and last checked timestamp
       subscriptionCacheMap.set(user.id, {
         data: result,
         timestamp: now
       });
+      setLastCheckedTimestamp(now);
       
       console.log("Subscription data refreshed:", result ? { status: result.status, validUntil: result.current_period_end } : "No valid subscription");
       setSubscription(result);
@@ -89,7 +134,7 @@ export function useSubscription() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, supabase]);
+  }, [user?.id, supabase, lastCheckedTimestamp, checkServerUpdates]);
 
   useEffect(() => {
     fetchSubscription();
