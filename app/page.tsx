@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTrialStatus } from '@/hooks/useTrialStatus';
 // import { DemoWidget } from '@/components/DemoWidget';
@@ -19,17 +20,16 @@ import {
 import { 
  Lock, CreditCard, Moon
 } from 'lucide-react';
-// import { motion } from "framer-motion";
+import { useScroll, useTransform } from "framer-motion";
 // import { Link as ScrollLink } from 'react-scroll';
 // import { VideoModal } from '@/components/VideoModal';
 import Hero from "@/components/landing/hero";
 import { KeyFeatures } from "@/components/landing/key-features";
 import Testimonials from "@/components/landing/testimonials";
-import { FAQ } from "@/components/landing/faq";
+import { Faq } from "@/components/landing/faq";
 import { Footer } from "@/components/footer";
 import { Suspense } from "react";
 import PostHogPageView from "@/components/PostHogPageView";
-import TopBar from "@/components/TopBar";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
@@ -132,26 +132,26 @@ const workflowSections = [
 
 // Custom Hook to create section progress values
 function useSectionProgressValues(numSections: number) {
-  // const { scrollYProgress } = useScroll();
+  const { scrollYProgress } = useScroll();
   
   // Create all transforms at once, at the top level
   const section1Progress = useTransform(
-    // scrollYProgress,
+    scrollYProgress,
     [0 / numSections, 1 / numSections],
     [0, 1]
   );
   const section2Progress = useTransform(
-    // scrollYProgress,
+    scrollYProgress,
     [1 / numSections, 2 / numSections],
     [0, 1]
   );
   const section3Progress = useTransform(
-    // scrollYProgress,
+    scrollYProgress,
     [2 / numSections, 3 / numSections],
     [0, 1]
   );
   const section4Progress = useTransform(
-    // scrollYProgress,
+    scrollYProgress,
     [3 / numSections, 4 / numSections],
     [0, 1]
   );
@@ -201,16 +201,13 @@ export default function LandingPage() {
   return (
     <Suspense>
       <PostHogPageView />
-      <div className="flex flex-col min-h-screen bg-background">
-        <TopBar />
-        <main className="flex-1">
-          <Hero />
-          <KeyFeatures />
-          <Testimonials />
-          <FAQ />
-        </main>
-        <Footer />
-      </div>
+      <main className="flex-1">
+        <Hero />
+        <KeyFeatures />
+        <Testimonials />
+        <Faq />
+      </main>
+      <Footer />
     </Suspense>
   );
 }

@@ -2,18 +2,26 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import type { Database } from '@/types_db';
-import ForgotPasswordModal from '@/components/ForgotPasswordModal';
+import { ForgotPasswordModal } from '@/components/ForgotPasswordModal';
 import { Auth } from '@supabase/auth-ui-react';
 import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
 
+// Ensure necessary env vars are available client-side
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing Supabase URL or Anon Key for login page client');
+  // Handle error appropriately, maybe show an error message to the user
+}
+
 export default function Login() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const supabase = createClientComponentClient<Database>();
+  const supabase = createBrowserClient<Database>(supabaseUrl!, supabaseAnonKey!);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [emailForPasswordReset, setEmailForPasswordReset] = useState('');
   const [resetError, setResetError] = useState<string | null>(null);
@@ -132,4 +140,4 @@ export default function Login() {
       </div>
     </div>
   );
-} 
+}
