@@ -3,9 +3,8 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { CoreMessage, generateText, tool } from 'ai';
 import { z } from 'zod';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { queryStructuredDocumentsAction } from './query-structured-documents';
+import { createClient } from '@/utils/supabase/server';
 
 // --- Types ---
 // Define structure for the results we *expect* from the (yet to be created) structured query action
@@ -81,16 +80,8 @@ export async function handleUserSearchQueryAction(
   // --- Authentication ---
   let currentUserId: string | null = null;
   try {
-      const cookieStore = await cookies();
-      const supabase = createServerClient(
-        supabaseUrl!,
-        supabaseAnonKey!,
-        { cookies: {
-            get(name: string) { return cookieStore.get(name)?.value; },
-            set(name: string, value: string, options: CookieOptions) { cookieStore.set({ name, value, ...options }); },
-            remove(name: string, options: CookieOptions) { cookieStore.set({ name, value: '', ...options }); }
-         } }
-      );
+      // Ensure we properly await the client creation
+      const supabase = await createClient();
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) { throw new Error("Authentication failed"); }
       currentUserId = user.id;

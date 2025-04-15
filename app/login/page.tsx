@@ -19,41 +19,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export default function Login() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const supabase = createBrowserClient<Database>(supabaseUrl!, supabaseAnonKey!);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [emailForPasswordReset, setEmailForPasswordReset] = useState('');
-  const [resetError, setResetError] = useState<string | null>(null);
-  const [resetSuccess, setResetSuccess] = useState(false);
 
-  const handlePasswordResetRequest = useCallback(async () => {
-    setResetError(null);
-    setResetSuccess(false);
+  const handlePasswordResetRequest = useCallback(() => {
     setIsModalOpen(true);
   }, []);
-
-  const handleModalSubmit = async (email: string) => {
-    if (!email) {
-      setResetError('Please enter your email address.');
-      return;
-    }
-    setEmailForPasswordReset(email);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/update-password`,
-      });
-      if (error) {
-        console.error("Password reset error:", error);
-        setResetError(error.message);
-      } else {
-        setResetSuccess(true);
-      }
-    } catch (error) {
-      console.error("Password reset exception:", error);
-      setResetError('An unexpected error occurred.');
-    }
-  };
 
   useEffect(() => {
     if (user) {
@@ -91,8 +64,7 @@ export default function Login() {
                 password_label: 'Password',
                 button_label: 'Sign in',
                 social_provider_text: 'Sign in with {{provider}}',
-                link_text: 'Already have an account? Sign in',
-                forgotten_password_link_text: 'Forgot your password?'
+                link_text: 'Already have an account? Sign in'
               },
               sign_up: {
                  email_label: 'Email address',
@@ -108,7 +80,6 @@ export default function Login() {
                },
                update_password: {
                  password_label: "New password",
-                 password_confirmation_label: "Confirm new password",
                  button_label: "Update password"
                }
             }
@@ -127,14 +98,7 @@ export default function Login() {
           isOpen={isModalOpen}
           onClose={() => {
             setIsModalOpen(false);
-            setResetError(null);
-            setResetSuccess(false);
-            setEmailForPasswordReset('');
           }}
-          onSubmit={handleModalSubmit}
-          initialEmail={emailForPasswordReset}
-          error={resetError}
-          success={resetSuccess}
         />
 
       </div>

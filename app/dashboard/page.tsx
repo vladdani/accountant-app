@@ -118,83 +118,81 @@ export default function Dashboard() {
   const [isLoadingChat, setIsLoadingChat] = useState<boolean>(false);
   const chatContainerRef = useRef<HTMLDivElement>(null); 
 
+  // --- Helper Functions for Data Fetching ---
+  const fetchTypes = async () => {
+    if (!user?.id) return;
+    
+    setIsLoadingTypes(true);
+    try {
+      const { data, error } = await supabase
+        .rpc('get_distinct_document_types', { user_id_param: user.id }); 
+
+      if (error) throw error;
+      
+      // Extract the 'document_type' string from each object in the array
+      const typesArray = data?.map((item: { document_type: string }) => item.document_type).filter(Boolean) ?? [];
+      
+      setAvailableTypes(typesArray); // Now availableTypes is string[]
+    } catch (error) {
+      console.error("Error fetching document types:", error);
+      setAvailableTypes([]); // Set empty on error
+    } finally {
+      setIsLoadingTypes(false);
+    }
+  };
+
+  const fetchDocuments = async () => {
+    if (!user?.id) return;
+
+    setIsLoadingDocuments(true);
+    let query = supabase
+      .from('documents')
+      .select('id, file_path, document_url, uploaded_at, extracted_data, original_filename')
+      .eq('uploaded_by', user.id);
+
+    // Apply filter logic
+    if (selectedFilter.type === 'category') {
+      query = query.eq('extracted_data->>type', selectedFilter.value);
+    } else if (selectedFilter.type === 'date') {
+      // TODO: Implement date filtering logic (e.g., year-month)
+    } else if (selectedFilter.type === 'special') {
+      if (selectedFilter.value === 'recent') {
+        query = query.order('uploaded_at', { ascending: false }).limit(20);
+      } else if (selectedFilter.value === 'starred') {
+        // TODO: Add is_starred column or similar logic
+      } else { // 'all'
+        query = query.order('uploaded_at', { ascending: false });
+      }
+    } else { // Default to all
+       query = query.order('uploaded_at', { ascending: false });
+    }
+
+    try {
+      const { data, error } = await query;
+      if (error) throw error;
+      setDocuments(data || []);
+    } catch (error) {
+      console.error(`Error fetching documents for filter ${selectedFilter.value}:`, error);
+      setDocuments([]);
+    } finally {
+      setIsLoadingDocuments(false);
+    }
+  };
+
   // --- Data Fetching useEffects ---
 
   // Fetch distinct document types for the sidebar
   useEffect(() => {
-    if (!user?.id) return;
-
-    const fetchTypes = async () => {
-      setIsLoadingTypes(true);
-      try {
-        const { data, error } = await supabase
-          .rpc('get_distinct_document_types', { user_id_param: user.id }); 
-          // Assumes a DB function `get_distinct_document_types` exists
-          // RPC function returns: TABLE(document_type text)
-          // So data is like: [{ document_type: 'invoice' }, { document_type: 'receipt' }]
-
-        if (error) throw error;
-        
-        // FIX: Extract the 'document_type' string from each object in the array
-        const typesArray = data?.map((item: { document_type: string }) => item.document_type).filter(Boolean) ?? [];
-        
-        setAvailableTypes(typesArray as string[]); // Now availableTypes is string[]
-      } catch (error) {
-        console.error("Error fetching document types:", error);
-        setAvailableTypes([]); // Set empty on error
-      } finally {
-        setIsLoadingTypes(false);
-      }
-    };
-
-    fetchTypes();
+    if (user?.id) {
+      fetchTypes();
+    }
   }, [user?.id]);
 
   // Fetch documents based on the selected filter
   useEffect(() => {
-    if (!user?.id) return;
-
-    const fetchDocuments = async () => {
-      setIsLoadingDocuments(true);
-      let query = supabase
-        .from('documents')
-        .select('id, file_path, document_url, uploaded_at, extracted_data, original_filename')
-        .eq('uploaded_by', user.id);
-
-      // Apply filter logic
-      if (selectedFilter.type === 'category') {
-        query = query.eq('extracted_data->>type', selectedFilter.value);
-      } else if (selectedFilter.type === 'date') {
-        // TODO: Implement date filtering logic (e.g., year-month)
-        // const [year, month] = selectedFilter.value.split('-'); // Commented out unused variables
-        // query = query.gte('uploaded_at', `${year}-${month}-01T00:00:00Z`)
-        //              .lt('uploaded_at', `${year}-${month + 1}-01T00:00:00Z`); // Adjust month logic
-      } else if (selectedFilter.type === 'special') {
-        if (selectedFilter.value === 'recent') {
-          query = query.order('uploaded_at', { ascending: false }).limit(20);
-        } else if (selectedFilter.value === 'starred') {
-          // TODO: Add is_starred column or similar logic
-          // query = query.eq('is_starred', true);
-        } else { // 'all'
-          query = query.order('uploaded_at', { ascending: false });
-        }
-      } else { // Default to all
-         query = query.order('uploaded_at', { ascending: false });
-      }
-
-      try {
-        const { data, error } = await query;
-        if (error) throw error;
-        setDocuments(data || []);
-      } catch (error) {
-        console.error(`Error fetching documents for filter ${selectedFilter.value}:`, error);
-        setDocuments([]);
-      } finally {
-        setIsLoadingDocuments(false);
-      }
-    };
-
-    fetchDocuments();
+    if (user?.id) {
+      fetchDocuments();
+    }
   }, [user?.id, selectedFilter]);
 
   // --- Other useEffects (Auth, Subscription, Onboarding Checks) --- 
@@ -313,14 +311,31 @@ export default function Dashboard() {
     setIsLoadingChat(true);
 
     // Convert ChatMessage[] to CoreMessage[] for the action
-    // Filter out non-string/element content and roles not needed by AI history
+    // Filter out non-string content and roles not needed by AI history
     const historyForAI: CoreMessage[] = currentMessages
-      .filter(msg => typeof msg.content === 'string' && (msg.role === 'user' || msg.role === 'assistant' || msg.role === 'tool'))
-      .map(msg => ({ 
-          role: msg.role,
-          content: msg.content as string, // Cast assumes string content
-          // Include tool info if your ChatMessage stores it and CoreMessage needs it
-      }));
+      .filter(msg => typeof msg.content === 'string')
+      .map(msg => {
+        // Only include messages with valid roles for CoreMessage
+        if (msg.role === 'user') {
+          return {
+            role: 'user' as const,
+            content: msg.content as string,
+          };
+        } else if (msg.role === 'assistant') {
+          return {
+            role: 'assistant' as const,
+            content: msg.content as string,
+          };
+        } else if (msg.role === 'tool') {
+          return {
+            role: 'tool' as const,
+            content: msg.content as string,
+          };
+        }
+        // Skip invalid roles by returning null, then filter out nulls
+        return null;
+      })
+      .filter(Boolean) as CoreMessage[];
 
     try {
       // Call the new AI search action

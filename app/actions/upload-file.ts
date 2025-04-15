@@ -1,27 +1,27 @@
 'use server';
 
 // Re-enable Supabase SSR and cookies
-import { createServerClient } from '@supabase/ssr'; 
 import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers'; 
+import { createClient as createServerClientFromUtils } from '@/utils/supabase/server';
+import { GoogleGenerativeAI, Part } from '@google/generative-ai';
 import { v4 as uuidv4 } from 'uuid';
 import { webcrypto as crypto } from 'node:crypto';
 
-// ---+++ Import OFFICIAL Google AI SDK (Remove unused safety imports) +++---
-import { GoogleGenerativeAI, Part } from "@google/generative-ai";
-// ---++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++---
-
 // Helper function to convert ArrayBuffer to hex string
 function bufferToHex(buffer: ArrayBuffer): string {
-  return [...new Uint8Array(buffer)]
+  return Array.from(new Uint8Array(buffer))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 }
 
-// Helper function to convert ArrayBuffer to Base64 string
+// Helper function to convert ArrayBuffer to base64
 function bufferToBase64(buffer: ArrayBuffer): string {
-  // Use Node.js Buffer for base64 encoding in server environment
-  return Buffer.from(buffer).toString('base64');
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 // Define the structure of the result
@@ -37,7 +37,7 @@ interface AiExtractionResult { // Define expected AI response structure
   vendor: string | null;
   date: string | null;
   type: string | null;
-  amount: number | string | null;
+  amount: number | null;
   currency: string | null;
 }
 
@@ -61,21 +61,9 @@ const extractionModel = genAI.getGenerativeModel({
 
 export async function uploadFile(formData: FormData): Promise<UploadResult> {
   console.log("--- Running Full uploadFile Action --- ");
-  const cookieStore = await cookies(); // Add await
 
   // <<< Create Supabase client for Server Actions using @supabase/ssr >>>
-  const supabaseUserClient = createServerClient(
-    supabaseUrl!,
-    supabaseAnonKey!, // <<< Use Anon key
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        // Optional: Add set/remove if needed by client, though usually not for server actions
-      },
-    }
-  );
+  const supabaseUserClient = await createServerClientFromUtils();
 
   // Admin client remains the same
   const supabaseAdmin = createClient(supabaseUrl!, supabaseServiceRoleKey!, {

@@ -1,8 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { createClient } from '@/utils/supabase/server';
 
 // Define the expected input parameters based on the tool definition
 const queryParamsSchema = z.object({
@@ -49,25 +48,7 @@ export async function queryStructuredDocumentsAction(
 
   try {
     // Use createServerClient from @supabase/ssr for authentication
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      supabaseUrl!, // Use loaded env vars
-      supabaseAnonKey!, 
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-          // Set and remove might be needed if the session is refreshed during the action
-          set(name: string, value: string, options: CookieOptions) {
-             cookieStore.set({ name, value, ...options });
-          },
-          remove(name: string, options: CookieOptions) {
-             cookieStore.set({ name, value: '', ...options });
-          },
-        },
-      }
-    );
+    const supabase = await createClient();
 
     // Perform authentication check
     const { data: { user }, error: authError } = await supabase.auth.getUser();

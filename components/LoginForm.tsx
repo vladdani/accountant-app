@@ -9,11 +9,19 @@ import { FcGoogle } from "react-icons/fc";
 export function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const { signInWithPassword, signInWithGoogle, loading, error } = useAuth(); // Use AuthContext
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const { signInWithEmail, signInWithGoogle, isLoading } = useAuth();
 
   const handleSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    await signInWithPassword(email, password); // Call context method
+    setLoginError(null);
+    
+    try {
+      await signInWithEmail(email, password);
+    } catch (err) {
+      console.error('Login error:', err);
+      setLoginError(err instanceof Error ? err.message : 'Failed to sign in');
+    }
   };
 
   return (
@@ -35,7 +43,7 @@ export function LoginForm() {
             placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={loading} // Use loading from context
+            disabled={isLoading}
             className="bg-input border-border"
           />
         </div>
@@ -50,17 +58,17 @@ export function LoginForm() {
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            disabled={loading} // Use loading from context
+            disabled={isLoading}
             className="bg-input border-border"
           />
         </div>
 
-        {error && (
-          <p className="text-xs text-destructive text-center">{error}</p>
+        {loginError && (
+          <p className="text-xs text-destructive text-center">{loginError}</p>
         )}
 
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? 'Signing In...' : 'Sign In'}
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? 'Signing In...' : 'Sign In'}
         </Button>
       </form>
 
@@ -73,7 +81,7 @@ export function LoginForm() {
         </div>
       </div>
 
-      <Button variant="outline" className="w-full border-border" onClick={signInWithGoogle} disabled={loading}>
+      <Button variant="outline" className="w-full border-border" onClick={signInWithGoogle} disabled={isLoading}>
          <FcGoogle className="mr-2 h-5 w-5" />
          Sign in with Google
       </Button>
