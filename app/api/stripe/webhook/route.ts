@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import Stripe from 'stripe';
 import { supabaseAdmin } from '@/utils/supabase-admin';
 import { withCors } from '@/utils/cors';
-import { clearSubscriptionCache } from '@/hooks/useSubscription';
+import { updateUserSubscriptionTimestamp } from '@/utils/subscription-cache-server';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
@@ -36,15 +36,48 @@ export const config = {
   },
 };
 
-async function checkExistingSubscription(customerId: string): Promise<boolean> {
-  const { data: existingSubs } = await supabaseAdmin
+async function checkExistingSubscription(customerId: string, userId?: string): Promise<boolean> {
+  // First check for existing active subscription by Stripe customer ID
+  const { data: existingByCustomerId } = await supabaseAdmin
     .from('subscriptions')
     .select('*')
     .eq('stripe_customer_id', customerId)
     .in('status', ['active', 'trialing'])
     .single();
 
-  return !!existingSubs;
+  if (existingByCustomerId) {
+    logWebhookEvent('Found existing subscription by customer ID', existingByCustomerId);
+    return true;
+  }
+
+  // If userId is provided, check for existing subscriptions by user ID as well
+  if (userId) {
+    const { data: existingByUserId } = await supabaseAdmin
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .in('status', ['active', 'trialing'])
+      .single();
+
+    if (existingByUserId) {
+      logWebhookEvent('Found existing subscription by user ID', existingByUserId);
+      return true;
+    }
+    
+    // Also check trial status in the user_trials table
+    const { data: existingTrial } = await supabaseAdmin
+      .from('user_trials')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (existingTrial && new Date(existingTrial.end_time) > new Date()) {
+      logWebhookEvent('User has an active trial', existingTrial);
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // Currently Handled Events:
@@ -94,12 +127,16 @@ export const POST = withCors(async function POST(request: NextRequest) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         
-        // Check for existing active subscription
-        const hasActiveSubscription = await checkExistingSubscription(session.customer as string);
+        // Check for existing active subscription using both customer ID and user ID
+        const hasActiveSubscription = await checkExistingSubscription(
+          session.customer as string, 
+          session.client_reference_id
+        );
         
         if (hasActiveSubscription) {
           logWebhookEvent('Duplicate subscription attempt blocked', {
             customerId: session.customer,
+            userId: session.client_reference_id,
             sessionId: session.id
           });
           
@@ -170,8 +207,7 @@ export const POST = withCors(async function POST(request: NextRequest) {
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted':
       case 'customer.subscription.pending_update_applied':
-      case 'customer.subscription.pending_update_expired':
-      case 'customer.subscription.trial_will_end': {
+      case 'customer.subscription.pending_update_expired': {
         const subscription = event.data.object as Stripe.Subscription;
         
         // First get the user_id for this subscription to clear cache
@@ -192,10 +228,10 @@ export const POST = withCors(async function POST(request: NextRequest) {
           })
           .eq('stripe_subscription_id', subscription.id);
         
-        // Clear the cache for this user if we found their ID
+        // Update the timestamp for this user if we found their ID
         if (subscriptionData?.user_id) {
-          logWebhookEvent('Clearing subscription cache for user', subscriptionData.user_id);
-          clearSubscriptionCache(subscriptionData.user_id);
+          logWebhookEvent('Updating subscription timestamp for user', subscriptionData.user_id);
+          updateUserSubscriptionTimestamp(subscriptionData.user_id);
         }
         
         break;
@@ -213,6 +249,66 @@ export const POST = withCors(async function POST(request: NextRequest) {
             updated_at: new Date().toISOString()
           })
           .eq('stripe_subscription_id', subscription.id);
+        
+        break;
+      }
+
+      case 'customer.subscription.trial_will_end': {
+        const subscription = event.data.object as Stripe.Subscription;
+        
+        // First get the user_id for this subscription
+        const { data: subscriptionData } = await supabaseAdmin
+          .from('subscriptions')
+          .select('user_id')
+          .eq('stripe_subscription_id', subscription.id)
+          .single();
+          
+        if (subscriptionData?.user_id) {
+          logWebhookEvent('Trial ending soon for user', subscriptionData.user_id);
+          
+          // Update subscription status to reflect trial ending
+          await supabaseAdmin
+            .from('subscriptions')
+            .update({
+              updated_at: new Date().toISOString()
+            })
+            .eq('stripe_subscription_id', subscription.id);
+            
+          // Update the timestamp for this user
+          updateUserSubscriptionTimestamp(subscriptionData.user_id);
+          
+          // Add here: Code to notify user about trial ending
+          // This could trigger an email, in-app notification, etc.
+        }
+        
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice;
+        
+        if (invoice.subscription) {
+          // Get the subscription and user data
+          const { data: subscriptionData } = await supabaseAdmin
+            .from('subscriptions')
+            .select('user_id')
+            .eq('stripe_subscription_id', invoice.subscription as string)
+            .single();
+            
+          if (subscriptionData?.user_id) {
+            logWebhookEvent('Payment failed for user', {
+              userId: subscriptionData.user_id,
+              invoiceId: invoice.id,
+              subscriptionId: invoice.subscription
+            });
+            
+            // Update the timestamp to refresh client state
+            updateUserSubscriptionTimestamp(subscriptionData.user_id);
+            
+            // Add here: Code to notify user about payment failure
+            // This could trigger an email, in-app notification, etc.
+          }
+        }
         
         break;
       }
@@ -280,9 +376,9 @@ async function createSubscription(subscriptionId: string, userId: string, custom
         throw updateError;
       }
       
-      // Clear the subscription cache for this user
-      logWebhookEvent('Clearing subscription cache for user', existingData.user_id);
-      clearSubscriptionCache(existingData.user_id);
+      // Update the subscription timestamp for this user
+      logWebhookEvent('Updating subscription timestamp for user', existingData.user_id);
+      updateUserSubscriptionTimestamp(existingData.user_id);
       
       return existingData;
     }
@@ -318,9 +414,9 @@ async function createSubscription(subscriptionId: string, userId: string, custom
       throw insertError;
     }
     
-    // Clear the subscription cache for this user after creating a new subscription
-    logWebhookEvent('Clearing subscription cache for user', userId);
-    clearSubscriptionCache(userId);
+    // Update the subscription timestamp for the new user
+    logWebhookEvent('Updating subscription timestamp for user', userId);
+    updateUserSubscriptionTimestamp(userId);
     
     return data;
   } catch (error) {
