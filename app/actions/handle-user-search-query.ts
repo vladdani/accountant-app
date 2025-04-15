@@ -50,44 +50,42 @@ const queryDocumentsTool = tool({
     max_amount: z.number().optional().describe("The maximum total amount to filter by."),
     currency: z.string().optional().describe("The 3-letter currency code to filter by (e.g., 'IDR', 'USD')."),
   }),
-  // Execute function will call the new structured query action (to be created)
+  // Execute function: This might not be strictly necessary if we handle execution
+  // directly based on toolCall.toolName below, but keep for potential future use/clarity.
+  // Removed unused _context argument.
   execute: async (args): Promise<StructuredToolExecuteSuccessResult | { queryResults: string, error: string }> => {
-    console.log(`AI requested structured query with args:`, args);
-
-    // --- Call the actual structured query action --- 
-    // Pass args directly, userId is no longer needed here
-    const result = await queryStructuredDocumentsAction(args); 
-    
+    console.log(`AI requested structured query with args (in execute):`, args);
+    // This execute function *should* ideally contain the logic to call queryStructuredDocumentsAction,
+    // but we are handling it directly in the main action flow for now.
+    // To avoid duplication, we can call the action here.
+    const result = await queryStructuredDocumentsAction(args);
     if (!result.success) {
-      console.error('queryStructuredDocumentsAction failed:', result.error);
+      console.error('queryStructuredDocumentsAction failed (in execute):', result.error);
       return { queryResults: "", error: `Failed to query documents: ${result.error || 'Unknown database error'}` };
     }
-    
     if (!result.data || result.data.length === 0) {
-      console.log('queryStructuredDocumentsAction returned no results.');
+      console.log('queryStructuredDocumentsAction returned no results (in execute).');
       return { queryResults: "No documents found matching those criteria." };
     }
-    
-    console.log(`queryStructuredDocumentsAction returned ${result.data.length} results.`);
-    return { queryResults: result.data }; 
+    console.log(`queryStructuredDocumentsAction returned ${result.data.length} results (in execute).`);
+    return { queryResults: result.data };
   },
 });
 // ---++++++++++++++++++++++++++++++++++++++++++++---
 
-// --- Main Action --- 
+// --- Main Action ---
 export async function handleUserSearchQueryAction(
   input: z.infer<typeof querySchema>
 ): Promise<{ success: boolean; response?: string; error?: string }> {
 
-  // --- Authentication (REMOVE Bypass Logic) ---
+  // --- Authentication ---
   let currentUserId: string | null = null;
-  try { 
-      // Await the cookies() call here
-      const cookieStore = await cookies(); 
-      const supabase = createServerClient( 
-        supabaseUrl!, 
-        supabaseAnonKey!, 
-        { cookies: { 
+  try {
+      const cookieStore = await cookies();
+      const supabase = createServerClient(
+        supabaseUrl!,
+        supabaseAnonKey!,
+        { cookies: {
             get(name: string) { return cookieStore.get(name)?.value; },
             set(name: string, value: string, options: CookieOptions) { cookieStore.set({ name, value, ...options }); },
             remove(name: string, options: CookieOptions) { cookieStore.set({ name, value: '', ...options }); }
@@ -97,22 +95,21 @@ export async function handleUserSearchQueryAction(
       if (authError || !user) { throw new Error("Authentication failed"); }
       currentUserId = user.id;
       console.log(`Using real ID: ${currentUserId}`);
-  } catch (catchError) { 
+  } catch (catchError) {
       console.error('Auth Error in handleUserSearchQueryAction:', catchError);
-      return { success: false, error: 'User identification failed.' }; 
+      return { success: false, error: 'User identification failed.' };
   }
   // ------------------------------------------
 
-  // --- Input Validation (Keep) ---
+  // --- Input Validation ---
   const validationResult = querySchema.safeParse(input);
   if (!validationResult.success) { return { success: false, error: validationResult.error.errors.map(e => e.message).join(', ') }; }
   const { userQuery, chatHistory = [] } = validationResult.data;
   // ------------------------------------------
 
   // --- Initial Message History ---
-  const initialMessages: CoreMessage[] = [
-    // Update system prompt to mention structured fields
-    { role: 'system', content: 'You are a helpful assistant for managing documents. You can query documents based on structured fields like vendor, date, type, amount, and currency using the provided tool. (Auth Bypass Active)' },
+  const messages: CoreMessage[] = [
+    { role: 'system', content: 'You are a helpful assistant for managing documents. You can query documents based on structured fields like vendor, date, type, amount, and currency using the provided tool.' },
     ...chatHistory,
     { role: 'user', content: userQuery },
   ];
@@ -121,91 +118,98 @@ export async function handleUserSearchQueryAction(
   try {
     // --- First AI Call (Determine if tool is needed) ---
     console.log("--- Sending to AI (First Call) ---");
-    console.log(JSON.stringify(initialMessages, null, 2));
-    const initialResult = await generateText({
+    console.log(JSON.stringify(messages, null, 2));
+    let result = await generateText({
       model: model,
-      messages: initialMessages,
-      // Provide the NEW tool
-      tools: { query_documents: queryDocumentsTool }, 
+      messages: messages,
+      tools: { query_documents: queryDocumentsTool },
     });
-    console.log("--- Received from AI (First Call) ---", initialResult);
+    console.log("--- Received from AI (First Call) ---", result);
     // ----------------------------------------------------
 
-    // --- Handle Tool Call OR Direct Response ---
-    let finalResponseText: string | undefined;
+    // --- Handle Tool Calls (Standard Pattern) ---
+    while (result.finishReason === 'tool-calls') {
+      console.log('AI wants to call tools:', result.toolCalls);
+      const toolCallResults: CoreMessage[] = [];
 
-    if (initialResult.finishReason === 'tool-calls' && initialResult.toolCalls) {
-      console.log('AI wants to call tools:', initialResult.toolCalls);
-      const toolCall = initialResult.toolCalls[0]; 
-      let queryResultSummary: string;
-      // Use z.infer to get the correct type for the tool arguments
-      let toolArgs: z.infer<typeof queryDocumentsTool.parameters>; 
-
-      // Ensure the correct tool is being called
-      if (toolCall.toolName === 'query_documents') { 
-        // Assign and type check toolCall.args
-        // Add validation here if needed, though Zod in tool definition should handle it
-        toolArgs = toolCall.args as z.infer<typeof queryDocumentsTool.parameters>; 
-        try {
-          // --- Execute the NEW tool --- 
-          // Remove check for currentUserId, auth is now handled inside the called action
-          // if (!currentUserId) throw new Error("Authentication context lost before tool execution.");
-          
-          // Call execute without userId
-          const rawToolResult = await queryDocumentsTool.execute(toolArgs);
-          // ----------------------------- 
-          
-          // Format the result into a simple string summary
-          if (rawToolResult.error) {
-            queryResultSummary = `An error occurred during the query: ${rawToolResult.error}`;
-          } else if (typeof rawToolResult.queryResults === 'string') {
-             queryResultSummary = `Query completed: ${rawToolResult.queryResults}`; 
-          } else if (Array.isArray(rawToolResult.queryResults)) {
-             queryResultSummary = `Query found ${rawToolResult.queryResults.length} document(s):\n` +
-               rawToolResult.queryResults.map(doc => 
-                   `- ${doc.name || `ID ${doc.id.substring(0,8)}...`}: Vendor=${doc.vendor || 'N/A'}, Date=${doc.document_date || 'N/A'}, Amt=${doc.total_amount !== null ? `${doc.total_amount} ${doc.currency || ''}`.trim() : 'N/A'}`
-               ).join('\n');
-          } else {
-             queryResultSummary = "Received an unexpected result format from the query tool.";
-          }
-        } catch (toolExecError) {
-           console.error(`Error executing tool ${toolCall.toolName}:`, toolExecError);
-           queryResultSummary = `A critical error occurred while trying to execute the query: ${toolExecError instanceof Error ? toolExecError.message : String(toolExecError)}`;
-        }
-      } else {
-        console.warn(`Unknown tool requested: ${toolCall.toolName}`);
-        queryResultSummary = `An unknown tool '${toolCall.toolName}' was requested.`;
+      // Define an interface for the tool result content
+      interface ToolResultContent {
+        results?: string;
+        error?: string;
       }
-      
-      console.log("--- Query Result Summary ---");
-      console.log(queryResultSummary);
-      console.log("----------------------------");
 
-      // --- Second AI Call (Synthesize response using summary) ---
-      console.log("--- Sending to AI (Second Call - Simplified) ---");
-      const messagesForSecondCall: CoreMessage[] = [
-          { role: 'system', content: 'You are a helpful assistant. Formulate a response to the user\'s original query based on the provided query results context.' },
-          { role: 'user', content: `My original query was: "${userQuery}"` }, 
-          { role: 'assistant', content: `Query context:\n${queryResultSummary}` }, 
-      ];
-      console.log(JSON.stringify(messagesForSecondCall, null, 2));
+      for (const toolCall of result.toolCalls) {
+        let toolCallResultContent: ToolResultContent; // Use the interface here
+        const toolName = toolCall.toolName; // Use const instead of let
 
-      const finalResult = await generateText({ model: model, messages: messagesForSecondCall });
-      console.log("--- Received from AI (Second Call) --- ", finalResult);
-      finalResponseText = finalResult.text;
-      // ---------------------------------------------------------- 
+        console.log(`Processing tool call: ${toolName} with args:`, toolCall.args);
 
-    } else if (initialResult.finishReason === 'stop') {
-      console.log('AI responded directly (First Call):', initialResult.text);
-      finalResponseText = initialResult.text;
-    } else {
-      console.error('Unexpected initial finish reason:', initialResult.finishReason, initialResult.toolCalls);
-      return { success: false, error: `AI processing failed with reason: ${initialResult.finishReason}.` };
+        try {
+          if (toolName === 'query_documents') {
+            // Directly call the action, passing validated args
+            // Ensure args match the Zod schema defined in the tool
+            const validatedArgs = queryDocumentsTool.parameters.parse(toolCall.args);
+            const actionResult = await queryStructuredDocumentsAction(validatedArgs);
+
+            if (!actionResult.success) {
+              console.error('queryStructuredDocumentsAction failed:', actionResult.error);
+              toolCallResultContent = { error: `Failed to query documents: ${actionResult.error || 'Unknown database error'}` };
+            } else if (!actionResult.data || actionResult.data.length === 0) {
+              console.log('queryStructuredDocumentsAction returned no results.');
+              toolCallResultContent = { results: "No documents found matching those criteria." };
+            } else {
+              console.log(`queryStructuredDocumentsAction returned ${actionResult.data.length} results.`);
+              // Summarize results for the AI
+               const summary = `Query found ${actionResult.data.length} document(s):\n` +
+                 actionResult.data.map(doc =>
+                     `- ${doc.name || `ID ${doc.id.substring(0,8)}...`}: Vendor=${doc.vendor || 'N/A'}, Date=${doc.document_date || 'N/A'}, Amt=${doc.total_amount !== null ? `${doc.total_amount} ${doc.currency || ''}`.trim() : 'N/A'}`
+                 ).join('\n');
+              toolCallResultContent = { results: summary };
+            }
+          } else {
+            console.warn(`Unsupported tool requested: ${toolName}`);
+            toolCallResultContent = { error: `Unsupported tool: ${toolName}` };
+          }
+        } catch (error) {
+          console.error(`Error executing tool ${toolName}:`, error);
+          toolCallResultContent = { error: `Error processing tool ${toolName}: ${error instanceof Error ? error.message : String(error)}` };
+        }
+
+        // Append the tool result message
+        toolCallResults.push({
+          role: 'tool',
+          content: JSON.stringify(toolCallResultContent),
+          toolCallId: toolCall.toolCallId,
+          toolName: toolName,
+        });
+      }
+
+      // Append the AI's message and the tool results to the history
+      messages.push(result.message);
+      messages.push(...toolCallResults);
+
+      console.log("--- Sending to AI (Next Call with Tool Results) ---");
+      console.log(JSON.stringify(messages, null, 2));
+
+      // Call generateText again with the updated messages
+      result = await generateText({
+        model: model,
+        messages: messages,
+        tools: { query_documents: queryDocumentsTool }, // Keep tools available if needed again
+      });
+
+      console.log("--- Received from AI (After Tool Call) ---", result);
     }
+    // -------------------------------------------
 
-    // --- Return Success --- 
-    if (finalResponseText !== undefined) { return { success: true, response: finalResponseText }; } 
-    else { return { success: false, error: 'Failed to generate final response.' }; }
+    // --- Final Response --- 
+    if (result.finishReason === 'stop') {
+      console.log('AI stopped, final response:', result.text);
+      return { success: true, response: result.text };
+    } else {
+      console.error('Unexpected final finish reason:', result.finishReason, result.toolCalls);
+      return { success: false, error: `AI processing ended unexpectedly with reason: ${result.finishReason}.` };
+    }
     // ----------------------
 
   } catch (err) {
