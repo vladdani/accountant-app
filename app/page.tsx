@@ -30,7 +30,6 @@ import { Faq } from "@/components/landing/faq";
 import { Footer } from "@/components/footer";
 import { Suspense } from "react";
 import PostHogPageView from "@/components/PostHogPageView";
-import TopBar from "@/components/TopBar";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
@@ -202,7 +201,6 @@ export default function LandingPage() {
   return (
     <Suspense>
       <PostHogPageView />
-      <TopBar />
       <main className="flex-1">
         <Hero />
         <KeyFeatures />
