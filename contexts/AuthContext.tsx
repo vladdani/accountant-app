@@ -144,7 +144,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            prompt: 'select_account',
+            access_type: 'offline'
+          }
         }
       });
     },
@@ -191,13 +195,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         // Then perform the actual signout
         console.log("Calling supabase.auth.signOut()...");
-        const { error: signOutError } = await supabase.auth.signOut();
+        const { error: signOutError } = await supabase.auth.signOut({ scope: 'global' });
         
         if (signOutError) {
           console.error('Supabase signOut error:', signOutError);
           // Optionally throw the error to be caught below, or handle differently
           throw signOutError; 
         }
+
+        // Clear Google's cookies to force prompt on next login
+        // These are common Google auth cookies that might persist
+        const googleCookies = ['__Secure-1PAPISID', '__Secure-3PAPISID', '__Secure-APISID', 
+                              'SAPISID', 'APISID', 'SSID', 'SID', 'HSID', 'NID'];
+        
+        googleCookies.forEach(cookieName => {
+          // Attempt to expire the cookie by setting it to a past date
+          document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.google.com; secure`;
+        });
 
         console.log("Supabase signOut successful. Redirecting to /...");
         // Force redirect to landing page
