@@ -116,6 +116,7 @@ export function useSubscription() {
         const response = await fetch('/api/stripe/sync', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ subscriptionId }),
         });
         
