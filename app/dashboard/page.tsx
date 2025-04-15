@@ -1,7 +1,7 @@
 "use client";
 
 // import { useWebSocket } from '@/contexts/WebSocketContext';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { PostgrestError } from '@supabase/supabase-js';
@@ -68,8 +68,12 @@ interface Document {
   file_path: string; // Path in storage
   document_url: string; // Public URL
   uploaded_at: string;
-  extracted_data: Record<string, unknown> | null;
+  extracted_data?: Record<string, unknown> | null; // Make this optional with ?
   original_filename: string | null;
+  // Add new columns from updated schema
+  document_type?: string | null;
+  document_date?: string | null;
+  total_amount?: number | null;
 }
 
 // Interface for chat messages
@@ -136,7 +140,7 @@ export default function Dashboard() {
   }, []);
 
   // --- Helper Functions for Data Fetching ---
-  const fetchTypes = async () => {
+  const fetchTypes = useCallback(async () => {
     if (!user?.id) return;
     
     console.log("Starting fetchTypes for user:", user.id);
@@ -165,9 +169,9 @@ export default function Dashboard() {
     } finally {
       setIsLoadingTypes(false);
     }
-  };
+  }, [user?.id, supabase]);
 
-  const fetchDocuments = async () => {
+  const fetchDocuments = useCallback(async () => {
     if (!user?.id) return;
 
     console.log("Starting fetchDocuments for user:", user.id, "with filter:", selectedFilter);
@@ -228,7 +232,7 @@ export default function Dashboard() {
     } finally {
       setIsLoadingDocuments(false);
     }
-  };
+  }, [user?.id, selectedFilter, supabase]);
 
   // --- Data Fetching useEffects ---
 
@@ -237,14 +241,14 @@ export default function Dashboard() {
     if (user?.id) {
       fetchTypes();
     }
-  }, [user?.id]);
+  }, [user?.id, fetchTypes]);
 
   // Fetch documents based on the selected filter
   useEffect(() => {
     if (user?.id) {
       fetchDocuments();
     }
-  }, [user?.id, selectedFilter]);
+  }, [user?.id, selectedFilter, fetchDocuments]);
 
   // --- Other useEffects (Auth, Subscription, Onboarding Checks) --- 
 
