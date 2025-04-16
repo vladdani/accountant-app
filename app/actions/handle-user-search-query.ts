@@ -42,7 +42,7 @@ const queryDocumentsTool = tool({
   description: "Query the user's processed documents based on structured criteria like vendor, date range, document type, amount, or currency. Use this when the user asks to find or filter documents using these kinds of specific fields.",
   parameters: z.object({
     vendor: z.string().optional().describe("The vendor or supplier name to filter by (partial or full match)."),
-    document_type: z.string().optional().describe("The type of document to filter by (e.g., 'invoice', 'receipt')."),
+    document_type: z.string().optional().describe("The type of document to filter by (e.g., 'invoice', 'receipt', 'contract', 'quote'). Interpret the user\'s request flexibly; if they mention a general term (like \'payment\' or \'agreement\'), determine the most probable stored document type(s) to search for based on common business practices."),
     start_date: z.string().optional().describe("The start date for filtering (inclusive), format YYYY-MM-DD."),
     end_date: z.string().optional().describe("The end date for filtering (inclusive), format YYYY-MM-DD."),
     min_amount: z.number().optional().describe("The minimum total amount to filter by."),
@@ -100,7 +100,7 @@ export async function handleUserSearchQueryAction(
 
   // --- Initial Message History ---
   const messages: CoreMessage[] = [
-    { role: 'system', content: 'You are a helpful assistant for managing documents. You can query documents based on structured fields like vendor, date, type, amount, and currency using the provided tool. When the user asks for specific data points (like transactions, amounts, dates for a vendor), extract and list that information clearly from the tool results. When the user asks for documents, provide a list of matching documents with key details (name, vendor, date, amount) based on the tool results. Always base your response on the data returned by the tool.' },
+    { role: 'system', content: 'You are a helpful assistant for managing documents. You query documents using the provided tool based on criteria like vendor, date, type, amount, and currency. When processing a user query, interpret their intent regarding the document type flexibly. If the user mentions a term like \'payment\', \'agreement\', \'bill\', etc., use your understanding to search for the most likely corresponding stored document types (e.g., invoice, receipt, contract, quote). Prioritize finding relevant documents even if the user\'s terminology doesn\'t exactly match the stored type. When presenting results, list specific data points if requested, or provide a list of matching documents with key details (name, vendor, date, amount). Always base your response on the data returned by the tool.' },
     ...chatHistory,
     { role: 'user', content: userQuery },
   ];
