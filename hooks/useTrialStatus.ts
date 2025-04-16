@@ -19,7 +19,7 @@ export function useTrialStatus() {
     setIsLoading(true);
 
     try {
-      /* // --- Start TEMP Block - Bypass Subscription Check ---
+      // --- Restore Subscription Check ---
       const { data: subscription } = await client 
         .from('subscriptions')
         .select('status')
@@ -28,7 +28,7 @@ export function useTrialStatus() {
         .maybeSingle();
 
       if (subscription) { 
-        console.log('[useTrialStatus - TEMP BYPASS] User has active/trialing subscription, setting isInTrial=false.');
+        console.log('[useTrialStatus] User has active/trialing subscription, setting isInTrial=false.');
         setTrialStatus({
           isInTrial: false, 
           trialEndTime: null
@@ -36,12 +36,26 @@ export function useTrialStatus() {
         setIsLoading(false);
         return;
       }
-      */ // --- End TEMP Block ---
+      // --- End Subscription Check ---
       
       // Check if user has an existing trial using the passed client
       const userId = user.id;
       console.log(`[useTrialStatus] Using user ID for query: ${userId}`);
       console.log(`[useTrialStatus] Attempting to fetch trial for user: ${userId}`);
+      
+      // *** Add explicit session refresh before trial query ***
+      try {
+          console.log('[useTrialStatus] Explicitly refreshing session before trial query...');
+          const { error: refreshError } = await client.auth.refreshSession();
+          if (refreshError) {
+              console.error('[useTrialStatus] Error refreshing session:', refreshError);
+              // Decide if you want to proceed or throw here depending on requirements
+          }
+      } catch (e) {
+          console.error('[useTrialStatus] Exception during session refresh:', e);
+      }
+      // *** End session refresh ***
+      
       const { data: trial, error: trialError } = await client
         .from('user_trials')
         .select('trial_end_time, is_trial_used')
