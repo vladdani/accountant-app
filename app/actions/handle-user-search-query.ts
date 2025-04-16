@@ -43,8 +43,8 @@ const queryDocumentsTool = tool({
   parameters: z.object({
     vendor: z.string().optional().describe("The vendor or supplier name to filter by (partial or full match)."),
     document_type: z.string().optional().describe("The type of document to filter by (e.g., 'invoice', 'receipt', 'contract', 'quote'). Interpret the user\'s request flexibly; if they mention a general term (like \'payment\' or \'agreement\'), determine the most probable stored document type(s) to search for based on common business practices."),
-    start_date: z.string().optional().describe("The start date for filtering (inclusive), format YYYY-MM-DD."),
-    end_date: z.string().optional().describe("The end date for filtering (inclusive), format YYYY-MM-DD."),
+    start_date: z.string().optional().describe("The start date for filtering (inclusive), format YYYY-MM-DD. Example: For a query 'in 2023', use '2023-01-01'."),
+    end_date: z.string().optional().describe("The end date for filtering (inclusive), format YYYY-MM-DD. Example: For a query 'in 2023', use '2023-12-31'."),
     min_amount: z.number().optional().describe("The minimum total amount to filter by."),
     max_amount: z.number().optional().describe("The maximum total amount to filter by."),
     currency: z.string().optional().describe("The 3-letter currency code to filter by (e.g., 'IDR', 'USD')."),
@@ -133,11 +133,19 @@ export async function handleUserSearchQueryAction(
         let toolCallResultContent: ToolResultContent; 
         const toolName = toolCall.toolName;
 
+        // ---+++ ADDED LOGGING +++---
+        console.log(`[AI Search] Attempting Tool Call: ${toolName}`);
+        console.log(`[AI Search] Raw Args from AI:`, JSON.stringify(toolCall.args, null, 2));
+        // ---+++++++++++++++++++++---
+
         console.log(`Processing tool call: ${toolName} with args:`, toolCall.args);
 
         try {
           if (toolName === 'query_documents') {
+            // Validate args BEFORE calling action
             const validatedArgs = queryDocumentsTool.parameters.parse(toolCall.args);
+            console.log(`[AI Search] Validated Args for DB Query:`, JSON.stringify(validatedArgs, null, 2)); // Log validated args
+            
             const actionResult = await queryStructuredDocumentsAction(validatedArgs);
 
             if (!actionResult.success) {
