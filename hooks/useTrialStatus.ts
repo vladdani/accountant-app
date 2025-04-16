@@ -79,7 +79,7 @@ export function useTrialStatus() {
     } finally {
       setIsLoading(false);
     }
-  }, [user?.id]);
+  }, [user?.id, supabaseClient]);
 
   useEffect(() => {
     if (supabaseClient) {
