@@ -80,6 +80,8 @@ export function useSubscription() {
     if (cached && (now - cached.timestamp < CACHE_DURATION)) {
       console.log("Using cached subscription data");
       
+      // Temporarily bypass server update check to isolate potential RLS issue on user_preferences
+      /*
       // Even if using cached data, check if server has updates
       try {
         const hasServerUpdates = await checkServerUpdates(user.id, lastCheckedTimestamp);
@@ -96,6 +98,12 @@ export function useSubscription() {
         console.error("Error checking for subscription updates:", error);
         // Continue to fetch anyway on error
       }
+      */
+      // START TEMPORARY CODE: Directly use cache if valid, skip server check for now
+      setSubscription(cached.data);
+      setLoading(false);
+      return;
+      // END TEMPORARY CODE
     }
 
     console.log("Fetching fresh subscription data from database");
