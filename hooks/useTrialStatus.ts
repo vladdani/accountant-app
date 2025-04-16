@@ -37,11 +37,13 @@ export function useTrialStatus() {
       }
 
       // Check if user has an existing trial using the passed client
-      console.log(`[useTrialStatus] Attempting to fetch trial for user: ${user.id}`);
+      const userId = user.id;
+      console.log(`[useTrialStatus] Using user ID for query: ${userId}`);
+      console.log(`[useTrialStatus] Attempting to fetch trial for user: ${userId}`);
       const { data: trial, error: trialError } = await client
         .from('user_trials')
         .select('trial_end_time, is_trial_used')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .maybeSingle();
 
       // Log the result immediately
