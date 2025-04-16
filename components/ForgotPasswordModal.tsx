@@ -9,7 +9,7 @@ interface ForgotPasswordModalProps {
 }
 
 export function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordModalProps) {
-  const { supabase } = useAuth();
+  const { supabaseClient } = useAuth();
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -20,7 +20,7 @@ export function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordModalProp
     setError('');
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/update-password#`,
       });
       if (error) throw error;

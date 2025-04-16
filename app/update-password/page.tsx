@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 
 export default function UpdatePasswordPage() {
-  const { supabase } = useAuth();
+  const { supabaseClient } = useAuth();
   const router = useRouter();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -23,7 +23,7 @@ export default function UpdatePasswordPage() {
       const type = hashParams.get('type');
 
       if (type === 'recovery' && accessToken) {
-        supabase.auth.setSession({
+        supabaseClient.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken || '',
         }).then(({ error }) => {
@@ -37,7 +37,7 @@ export default function UpdatePasswordPage() {
     } else {
       setError('Auth session missing!');
     }
-  }, [supabase.auth]);
+  }, [supabaseClient.auth]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +50,7 @@ export default function UpdatePasswordPage() {
     setError('');
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { error } = await supabaseClient.auth.updateUser({
         password: newPassword
       });
 
