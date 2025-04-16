@@ -115,6 +115,7 @@ export default function Dashboard() {
   const [selectedFilter, setSelectedFilter] = useState<Filter>({ type: 'special', value: 'all' });
   const [availableTypes, setAvailableTypes] = useState<string[]>([]);
   const [isLoadingTypes, setIsLoadingTypes] = useState<boolean>(true);
+  const [processingDocId, setProcessingDocId] = useState<string | null>(null); // State for AI processing
   // TODO: Add state for available dates (years/months) later
 
   // State for chat
@@ -381,36 +382,82 @@ export default function Dashboard() {
     }
   }, [chatMessages]);
 
+  // ---+++ Realtime Listener for Document Updates +++---
+  useEffect(() => {
+    if (!processingDocId || !supabase) return;
+
+    console.log(`Setting up Realtime listener for document ID: ${processingDocId}`);
+
+    const channel = supabase.channel(`doc-update-${processingDocId}`)
+      .on(
+        'postgres_changes',
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'documents', 
+          filter: `id=eq.${processingDocId}` 
+        },
+        (payload) => {
+          console.log('Realtime UPDATE received for document:', payload.new.id);
+          setUploadStatus("AI Processing complete! Refreshing list...");
+          // Refresh data
+          fetchDocuments();
+          fetchTypes();
+          // Clear processing state
+          setProcessingDocId(null);
+          // Clear status message after a short delay
+          setTimeout(() => setUploadStatus(""), 3000);
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`Realtime channel SUBSCRIBED for doc ${processingDocId}`);
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error(`Realtime channel error for doc ${processingDocId}:`, status, err);
+           setUploadStatus("Error listening for updates. Refresh manually.");
+           setProcessingDocId(null); // Stop listening on error
+        }
+      });
+
+    // Cleanup function to remove the channel subscription
+    return () => {
+      if (channel) {
+        console.log(`Cleaning up Realtime channel for doc ${processingDocId}`);
+        supabase.removeChannel(channel).catch(error => {
+             console.error("Error removing realtime channel:", error);
+        });
+      }
+    };
+  }, [processingDocId, supabase, fetchDocuments, fetchTypes]); // Add dependencies
+  // ---++++++++++++++++++++++++++++++++++++++++++++++---
+
   // --- Helper Functions --- 
   const handleUploadSuccess = (result: { 
     success: boolean; 
     url?: string; 
+    dbRecordId?: string; // Expect dbRecordId on success
     error?: string; 
     duplicateOf?: { id: string; name: string | null };
   }) => {
-    if (result.success && result.url) {
-      console.log("Upload successful on dashboard:", result.url);
-      setUploadStatus(`File uploaded successfully! Processing...`);
-      // Refresh documents and types after upload (with a small delay for processing)
-      setTimeout(() => {
-         setSelectedFilter(prev => ({ ...prev })); // Trigger refetch by changing filter state slightly
-         // TODO: Add refetch logic for types as well
-      }, 3000); 
-      setTimeout(() => setUploadStatus(""), 5000); 
-      fetchDocuments(); // Refresh documents after upload
-      fetchTypes(); // Refresh types after upload
+    if (result.success && result.dbRecordId) {
+      console.log("Upload successful, initiating AI processing for:", result.dbRecordId);
+      // Set status and track the ID for Realtime listener
+      setUploadStatus(`File uploaded. Processing with AI...`); 
+      setProcessingDocId(result.dbRecordId);
+      // REMOVE immediate refresh calls
+      // fetchDocuments();
+      // fetchTypes();
+      // Clear status message after a longer delay, processing might take time
+      setTimeout(() => setUploadStatus(""), 10000); 
     } else if (result.duplicateOf) {
-      // Handle duplicate case
       console.warn("Duplicate file detected:", result.duplicateOf);
       const duplicateName = result.duplicateOf.name || 'an existing document';
-      setUploadStatus(`File already exists: ${duplicateName}.`);
-      // Optionally, highlight the existing document or navigate to it
-      setTimeout(() => setUploadStatus(""), 5000); 
+      // Slightly more informative message
+      setUploadStatus(`Duplicate: File already exists named '${duplicateName}'.`); 
+      setTimeout(() => setUploadStatus(""), 7000); 
     } else {
-      // Handle generic upload error
       console.error("Upload failed on dashboard:", result.error);
       setUploadStatus(`Error: ${result.error || 'Failed to upload file. Check console.'}`);
-      // Optionally, show error for longer
       setTimeout(() => setUploadStatus(""), 7000);
     }
   };
