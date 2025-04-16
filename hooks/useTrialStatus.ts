@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { type SupabaseClient } from '@supabase/supabase-js';
 
 export function useTrialStatus() {
-  const { user, supabaseClient } = useAuth();
+  const { user, supabaseClient, isLoading: isAuthLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [trialStatus, setTrialStatus] = useState<{
     isInTrial: boolean;
@@ -82,15 +82,22 @@ export function useTrialStatus() {
   }, [user?.id, supabaseClient]);
 
   useEffect(() => {
+    if (isAuthLoading) {
+      setIsLoading(true);
+      return;
+    }
+
     if (supabaseClient) {
       checkTrialStatus(supabaseClient);
     } else {
       if (!user) {
         setIsLoading(false);
         setTrialStatus({ isInTrial: false, trialEndTime: null });
+      } else {
+        setIsLoading(true);
       }
     }
-  }, [checkTrialStatus, supabaseClient, user]);
+  }, [isAuthLoading, checkTrialStatus, supabaseClient, user]);
 
   return { ...trialStatus, isLoading };
 }
