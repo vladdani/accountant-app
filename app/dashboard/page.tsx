@@ -4,12 +4,12 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { PostgrestError } from '@supabase/supabase-js';
+// import { PostgrestError } from '@supabase/supabase-js';
 
-import { useRouter } from 'next/navigation';
-import { useSubscription } from '@/hooks/useSubscription';
+// import { useRouter } from 'next/navigation';
+// import { useSubscription } from '@/hooks/useSubscription';
 // import { OnboardingTour } from '@/components/OnboardingTour';
-import { useTrialStatus } from '@/hooks/useTrialStatus';
+// import { useTrialStatus } from '@/hooks/useTrialStatus';
 // import { motion } from 'framer-motion';
 import { FileUpload } from "@/components/file-upload";
 import { 
@@ -32,7 +32,7 @@ import {
   Send,
   Loader2,
 } from 'lucide-react';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+// import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 // import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // No longer used
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
@@ -70,6 +70,10 @@ import remarkGfm from 'remark-gfm';
 // Import Input and Textarea components
 import { Textarea } from "@/components/ui/textarea";
 
+// Import new sidebar components
+// Remove unused SidebarLink import
+import { Sidebar, SidebarBody /*, SidebarLink */ } from "@/components/ui/sidebar";
+
 // --- Types ---
 interface Document {
   id: string;
@@ -103,11 +107,11 @@ interface Filter {
 export default function Dashboard() {
   // --- ALL HOOKS MUST BE CALLED AT THE TOP LEVEL ---
   const { user, isLoading: isAuthLoading } = useAuth();
-  const router = useRouter();
-  const { subscription, isLoading: isSubLoading, fetchSubscription } = useSubscription();
-  const { isInTrial, isLoading: isTrialLoading } = useTrialStatus();
+  // const router = useRouter();
+  // const { subscription, isLoading: isSubLoading, fetchSubscription } = useSubscription();
+  // const { isInTrial, isLoading: isTrialLoading } = useTrialStatus();
   const [uploadStatus, setUploadStatus] = useState<string>(""); 
-  const [isMobile, setIsMobile] = useState<boolean>(false);
+  // const [isMobile, setIsMobile] = useState<boolean>(false);
   
   // State for document display and filtering
   const [documents, setDocuments] = useState<Document[]>([]); // Use the updated Document interface
@@ -117,6 +121,8 @@ export default function Dashboard() {
   const [isLoadingTypes, setIsLoadingTypes] = useState<boolean>(true);
   const [processingDocId, setProcessingDocId] = useState<string | null>(null); // State for AI processing
   // TODO: Add state for available dates (years/months) later
+  const [documentCount, setDocumentCount] = useState<number>(0); // State for document count
+  const [isLoadingCount, setIsLoadingCount] = useState(true); // Loading state for count
 
   // State for chat
   const [chatInput, setChatInput] = useState<string>("");
@@ -131,22 +137,6 @@ export default function Dashboard() {
   const [isLoadingChat, setIsLoadingChat] = useState<boolean>(false);
   const chatContainerRef = useRef<HTMLDivElement>(null); 
 
-  // Check for mobile screen size
-  useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    // Initial check
-    checkIsMobile();
-    
-    // Add event listener for resize
-    window.addEventListener('resize', checkIsMobile);
-    
-    // Cleanup
-    return () => window.removeEventListener('resize', checkIsMobile);
-  }, []);
-
   // --- Helper Functions for Data Fetching ---
   const fetchTypes = useCallback(async () => {
     if (!user?.id) return;
@@ -154,27 +144,30 @@ export default function Dashboard() {
     console.log("Starting fetchTypes for user:", user.id);
     setIsLoadingTypes(true);
     try {
-      // Query distinct document types directly from the column
       const { data, error } = await supabase
         .from('documents')
         .select('document_type')
         .eq('uploaded_by', user.id)
         .not('document_type', 'is', null);
 
-      console.log("Types fetch result:", { data, error, userId: user.id });
+      console.log("Types fetch raw result:", { data, error, userId: user.id }); // Log raw result
 
-      if (error) throw error;
+      if (error) {
+         console.error("!!! Error explicitly thrown during fetchTypes:", error); // Add explicit log
+         throw error;
+      }
       
-      // Get unique document types
       const typesSet = new Set(data.map(item => item.document_type));
       const typesArray = Array.from(typesSet);
       
       console.log("Processed document types:", typesArray);
       setAvailableTypes(typesArray);
     } catch (error) {
-      console.error("Error fetching document types:", error);
-      setAvailableTypes([]); // Set empty on error
+      // Add more detail to catch log
+      console.error("!!! CATCH block hit in fetchTypes:", error instanceof Error ? error.message : error);
+      setAvailableTypes([]); 
     } finally {
+      console.log("Finished fetchTypes, setting loading false."); // Log finally
       setIsLoadingTypes(false);
     }
   }, [user?.id]);
@@ -213,18 +206,12 @@ export default function Dashboard() {
     }
 
     try {
-      console.log("Executing Supabase query...");
+      console.log("Executing Supabase documents query...");
       const { data, error } = await query;
-      console.log("Documents query result:", { 
+       // Log raw result before processing
+      console.log("Documents query raw result:", { 
         count: data?.length || 0, 
-        error, 
-        firstDocument: data && data.length > 0 ? {
-          id: data[0].id,
-          documentType: data[0].document_type,
-          documentDate: data[0].document_date,
-          uploadedAt: data[0].uploaded_at,
-          originalFilename: data[0].original_filename
-        } : null
+        error 
       });
       
       // Log full data in development only
@@ -232,15 +219,43 @@ export default function Dashboard() {
         console.log("Full documents data:", data);
       }
       
-      if (error) throw error;
+      if (error) {
+           console.error("!!! Error explicitly thrown during fetchDocuments:", error); // Add explicit log
+           throw error;
+      }
       setDocuments(data || []);
     } catch (error) {
-      console.error(`Error fetching documents for filter ${selectedFilter.value}:`, error);
+      // Add more detail to catch log
+      console.error(`!!! CATCH block hit in fetchDocuments for filter ${selectedFilter.value}:`, error instanceof Error ? error.message : error);
       setDocuments([]);
     } finally {
+      console.log("Finished fetchDocuments, setting loading false."); // Log finally
       setIsLoadingDocuments(false);
     }
   }, [user?.id, selectedFilter]);
+
+  // Function to fetch document count
+  const fetchDocumentCount = useCallback(async () => {
+    if (!user?.id || !supabase) return;
+    console.log('[fetchDocumentCount] Starting fetch...');
+    setIsLoadingCount(true);
+    try {
+      const { count, error } = await supabase
+        .from('documents')
+        .select('*' , { count: 'exact', head: true })
+        .eq('uploaded_by', user.id);
+
+      if (error) throw error;
+
+      console.log(`[fetchDocumentCount] Raw result: count=${count}`);
+      setDocumentCount(count ?? 0);
+    } catch (error) {
+      console.error('Error fetching document count:', error);
+      setDocumentCount(0); // Default to 0 on error
+    } finally {
+      setIsLoadingCount(false);
+    }
+  }, [user?.id, supabase]);
 
   // --- Data Fetching useEffects ---
 
@@ -258,131 +273,18 @@ export default function Dashboard() {
     }
   }, [user?.id, selectedFilter, fetchDocuments]);
 
-  // --- Other useEffects (Auth, Subscription, Onboarding Checks) --- 
-
-  // Combine initial fetch/refresh and onboarding check
+  // Initial data fetch and filter application
   useEffect(() => {
-    if (user?.id) {
-      console.log("Dashboard mounted/user changed, forcing subscription fetch.");
-      // Force refresh subscription data with skipCache=true
-      fetchSubscription(true); 
-      
-      // Also call the subscription refresh API endpoint
-      const refreshSubscription = async () => {
-        try {
-          console.log("Calling subscription refresh API...");
-          const response = await fetch('/api/subscription/refresh', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
-          });
-          
-          if (!response.ok) {
-            const errorData = await response.json();
-            console.error("Failed to refresh subscription:", errorData);
-            return;
-          }
-          
-          const data = await response.json();
-          console.log("Subscription refresh API response:", data);
-          
-          // If subscription found, force another fetch to sync the client
-          if (data.hasActiveSubscription && data.subscription) {
-            console.log("Active subscription found, refreshing client state");
-            setTimeout(() => fetchSubscription(true), 500);
-          }
-        } catch (error) {
-          console.error("Error calling subscription refresh API:", error);
-        }
-      };
-      
-      refreshSubscription();
-      
-      const checkOnboarding = async () => {
-        try {
-            // Comment out data assignment if not used
-            // const { data: onboardingData, error } = await supabase
-            const { error } = await supabase // Only fetch error if data isn't needed
-              .from('user_preferences')
-              .select('has_completed_onboarding') // Still need to select something
-              .eq('user_id', user.id)
-              .single();
-            
-            if (error && (error as PostgrestError)?.code !== 'PGRST116') { // Use PostgrestError type
-                 console.error('Error checking onboarding status:', error);
-            }
-            // else: Row not found or success, do nothing for now
-        } catch (error) {
-            // Catch any other unexpected errors during the check
-            console.error('Unexpected error checking onboarding status:', error);
-        }
-      };
-      checkOnboarding();
-
-    } else {
-        // Reset relevant state if user becomes null (if hasCheckedSubscription was used elsewhere)
-        // setHasCheckedSubscription(false); 
-        console.log("Dashboard mounted/user changed, no user ID found.");
+    if (user?.id && supabase) {
+      fetchTypes();
+      fetchDocumentCount(); // Fetch count on initial load/user change
+      // Initial fetch based on default filter
+      fetchDocuments(); // Call without argument
     }
-  }, [user?.id]);
+    // Add fetchDocumentCount to dependencies
+  }, [user?.id, supabase, fetchDocuments, fetchTypes, fetchDocumentCount, selectedFilter]);
 
-  // *** REVISED Redirect Effect - Combine checks after loading ***
-  useEffect(() => {
-    // Wait until all relevant loading states are false
-    if (isAuthLoading || isSubLoading || isTrialLoading) {
-        console.log("Waiting for loading states...", { isAuthLoading, isSubLoading, isTrialLoading });
-        return; 
-    }
-
-    // Only perform check if we have definitively loaded user/sub/trial states
-    console.log("Checking access permissions...", { user: !!user, subscription, status: subscription?.status, isInTrial });
-    
-    // Restore hasValidSubscription check with enhanced logging
-    const hasValidSubscription = subscription && ['active', 'trialing'].includes(subscription.status);
-    
-    if (hasValidSubscription) {
-      console.log("Valid subscription detected:", subscription.status);
-    }
-    
-    if (isInTrial) {
-      console.log("User is in trial period");
-    }
-
-    // Only redirect if user is not logged in
-    if (!user) {
-      console.log("Redirecting to /login: No user found");
-      router.replace('/login');
-      return;
-    }
-    
-    // If no valid subscription AND no trial, redirect to profile
-    if (!hasValidSubscription && !isInTrial) {
-      console.log("Redirecting to /profile: No valid subscription or trial", { 
-        subscriptionStatus: subscription?.status,
-        isInTrial
-      });
-      router.replace('/profile');
-    } else {
-      console.log("User has access to dashboard:", { 
-        hasValidSubscription,
-        subscriptionStatus: subscription?.status,
-        isInTrial
-      });
-    }
-
-  // Depend on the actual data and loading states needed for the decision
-  }, [user, subscription, isInTrial, isAuthLoading, isSubLoading, isTrialLoading, router]);
-
-  // Scroll chat useEffect - MUST be here, after all state/ref hooks
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
-  }, [chatMessages]);
-
-  // ---+++ Realtime Listener for Document Updates +++---
+  // Realtime listener for document changes
   useEffect(() => {
     if (!processingDocId || !supabase) return;
 
@@ -400,12 +302,11 @@ export default function Dashboard() {
         (payload) => {
           console.log('Realtime UPDATE received for document:', payload.new.id);
           setUploadStatus("AI Processing complete! Refreshing list...");
-          // Refresh data
-          fetchDocuments();
+          // Refresh data using the current filter (implicitly via dependency)
+          fetchDocuments(); // Call without argument
           fetchTypes();
-          // Clear processing state
+          fetchDocumentCount();
           setProcessingDocId(null);
-          // Clear status message after a short delay
           setTimeout(() => setUploadStatus(""), 3000);
         }
       )
@@ -415,11 +316,10 @@ export default function Dashboard() {
         } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.error(`Realtime channel error for doc ${processingDocId}:`, status, err);
            setUploadStatus("Error listening for updates. Refresh manually.");
-           setProcessingDocId(null); // Stop listening on error
+           setProcessingDocId(null); 
         }
       });
 
-    // Cleanup function to remove the channel subscription
     return () => {
       if (channel) {
         console.log(`Cleaning up Realtime channel for doc ${processingDocId}`);
@@ -428,8 +328,15 @@ export default function Dashboard() {
         });
       }
     };
-  }, [processingDocId, supabase]);
-  // ---++++++++++++++++++++++++++++++++++++++++++++++---
+    // Ensure dependencies are correct for this single listener
+  }, [processingDocId, supabase, fetchDocuments, fetchTypes, fetchDocumentCount, selectedFilter]); 
+
+  // Scroll chat useEffect 
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   // --- Helper Functions --- 
   const handleUploadSuccess = (result: { 
@@ -551,7 +458,7 @@ export default function Dashboard() {
   };
 
   // --- Conditional Returns *AFTER* all hooks ---
-  if (isAuthLoading || isTrialLoading) {
+  if (isAuthLoading /*|| isTrialLoading*/) {
      return (
       <div className="h-screen w-full flex items-center justify-center">
          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
@@ -559,264 +466,252 @@ export default function Dashboard() {
     );
   }
 
-  // --- Main Component Return --- 
+  // --- Sidebar Links Definition ---
+  const sidebarLinks = [
+    {
+      label: `All Documents ${isLoadingCount ? '' : `(${documentCount})`}`,
+      href: "#", // Placeholder, actual filtering handled by onClick
+      icon: isLoadingCount ? <Loader2 className="mr-3 h-5 w-5 animate-spin" /> : <Inbox className="mr-3 h-5 w-5" />,
+      filter: { type: 'special', value: 'all' } as Filter
+    },
+    {
+      label: "Recent",
+      href: "#",
+      icon: <Clock className="mr-3 h-5 w-5" />,
+      filter: { type: 'special', value: 'recent' } as Filter
+    },
+    {
+      label: "Starred",
+      href: "#",
+      icon: <Star className="mr-3 h-5 w-5" />,
+      filter: { type: 'special', value: 'starred' } as Filter,
+      disabled: true // Keep disabled for now
+    },
+  ];
+
+  const categoryLinks = isLoadingTypes ? [] : availableTypes.map((type) => ({
+      label: type || 'Uncategorized',
+      href: "#",
+      icon: <Folder className="mr-3 h-5 w-5" />,
+      filter: { type: 'category', value: type } as Filter
+  }));
+
+  // --- Main Component Return ---
   return (
-    <div className="h-[100vh] max-h-[100vh] w-full flex flex-col bg-slate-50 dark:bg-[#0B1120] overflow-hidden">
-      {/* Resizable panel group starts immediately */}
-      <ResizablePanelGroup 
-        direction={isMobile ? "vertical" : "horizontal"} 
-        className="w-full h-full flex-grow overflow-hidden"
-      > 
-        {/* Left Sidebar - UPDATED with responsive layout */}
-        <ResizablePanel 
-          defaultSize={isMobile ? 25 : 20} 
-          minSize={isMobile ? 20 : 15} 
-          maxSize={isMobile ? 50 : 25} 
-          className="bg-white dark:bg-neutral-dark border-r dark:border-slate-700 p-4 flex flex-col h-full overflow-hidden"
-        >
-          <div className="flex-shrink-0">
-            <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2 px-2">Main</h3>
-          </div>
-          <nav className="flex flex-col space-y-1 overflow-y-auto flex-grow">
-             <Button 
-                variant={selectedFilter.type === 'special' && selectedFilter.value === 'all' ? "secondary" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => handleFilterChange({ type: 'special', value: 'all' })}
-              >
-                <Inbox className="mr-3 h-5 w-5" /> All Documents
-             </Button>
-             <Button 
-                variant={selectedFilter.type === 'special' && selectedFilter.value === 'recent' ? "secondary" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => handleFilterChange({ type: 'special', value: 'recent' })}
-             >
-                <Clock className="mr-3 h-5 w-5" /> Recent
-             </Button>
-             <Button 
-                variant={selectedFilter.type === 'special' && selectedFilter.value === 'starred' ? "secondary" : "ghost"}
-                className="w-full justify-start"
-                onClick={() => handleFilterChange({ type: 'special', value: 'starred' })}
-                disabled // TODO: Enable when starring is implemented
-             >
-                <Star className="mr-3 h-5 w-5" /> Starred
-             </Button>
-              
-              <h3 className="text-xs font-semibold text-slate-500 uppercase mt-4 mb-2 px-2">Categories</h3>
-             {isLoadingTypes ? (
-               <div className="px-2 space-y-2">
-                 <Skeleton className="h-8 w-full" />
-                 <Skeleton className="h-8 w-full" />
-               </div>
-             ) : availableTypes.length > 0 ? (
-               availableTypes.map((type, index) => (
-                  <Button 
-                     key={`${type}-${index}`}
-                     variant={selectedFilter.type === 'category' && selectedFilter.value === type ? "secondary" : "ghost"}
-                     className="w-full justify-start capitalize"
-                     onClick={() => handleFilterChange({ type: 'category', value: type })}
-                  >
-                     <Folder className="mr-3 h-5 w-5" /> {type || 'Uncategorized'}
-                  </Button>
+    // Use flex row layout, full screen height, prevent body scroll
+    <div className="flex flex-row h-screen w-screen overflow-hidden bg-slate-50 dark:bg-[#0B1120]">
+      {/* === START NEW SIDEBAR === */}
+      {/* Sidebar manages its own width and transition */}
+      <Sidebar> 
+         <SidebarBody className="justify-between gap-10 px-0 py-4 border-r dark:border-slate-700"> {/* Add border */} 
+            {/* ... existing sidebar content (Main links, Categories, Settings) ... */}
+              <div className="flex flex-col flex-1 overflow-y-auto px-4"> {/* Inner scrollable area */} 
+                 {/* Using Buttons for links to maintain style/click handling */} 
+                 <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Main</h3>
+                 {sidebarLinks.map((link, idx) => (
+                    <Button
+                        key={`link-${idx}`}
+                        variant={selectedFilter.type === link.filter.type && selectedFilter.value === link.filter.value ? "secondary" : "ghost"}
+                        className="w-full justify-start gap-2"
+                        onClick={() => !link.disabled && handleFilterChange(link.filter)}
+                        disabled={link.disabled}
+                    >
+                       {link.icon}
+                       {link.label}
+                    </Button>
+                 ))}
+                 <h3 className="text-xs font-semibold text-slate-500 uppercase mt-4 mb-2">Categories</h3>
+                 {isLoadingTypes ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                 ) : categoryLinks.length > 0 ? (
+                   categoryLinks.map((link, idx) => (
+                     <Button 
+                        key={`cat-${idx}`}
+                        variant={selectedFilter.type === link.filter.type && selectedFilter.value === link.filter.value ? "secondary" : "ghost"}
+                        className="w-full justify-start gap-2 capitalize"
+                        onClick={() => handleFilterChange(link.filter)}
+                     >
+                        {link.icon} {link.label}
+                     </Button>
+                   ))
+                 ) : (
+                   <p className="text-xs text-slate-500">No categories found.</p>
+                 )}
+                 {/* TODO: Date Filter section could go here */} 
+              </div>
+              {/* Bottom Section (e.g., Settings) */} 
+              <div className="mt-auto flex-shrink-0 px-4 pb-4"> {/* Add padding */} 
+                 <Link href="/profile" className="flex items-center p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">
+                    <Settings className="mr-3 h-5 w-5" /> Settings
+                 </Link>
+              </div>
+           </SidebarBody>
+         </Sidebar>
+      {/* === END NEW SIDEBAR === */}
+
+      {/* Center Content Area - Takes up remaining space */} 
+      <div className="flex-1 flex flex-col overflow-hidden h-full max-h-full px-4 sm:px-6 lg:px-8 py-4 md:py-6">
+         {/* Upload Zone - Adjust top margin/padding if needed after container padding */}
+         <div className="mb-4 md:mb-6 p-4 md:p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-800 flex-shrink-0">
+           <FileUpload onUploadComplete={handleUploadSuccess} /> 
+           {uploadStatus && ( 
+            <p className={`mt-4 text-sm font-medium ${uploadStatus.startsWith('File already exists') ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
+               {uploadStatus}
+            </p>
+          )}
+        </div>
+        
+        {/* Document Display Area - Adjust margin/padding if needed */} 
+        <h3 className="text-lg md:text-xl font-semibold mb-4 text-slate-900 dark:text-white capitalize flex-shrink-0">
+           {selectedFilter.type === 'special' ? `Document Explorer - ${selectedFilter.value}` : `Document Explorer - ${selectedFilter.value}`}
+           {isLoadingDocuments ? "" : ` (${documents.length})`}
+        </h3>
+        <div className="flex-grow overflow-auto border dark:border-slate-700 rounded-md h-0 min-h-0"> 
+          <Table className="min-w-full">
+            <TableHeader className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10">
+              <TableRow>
+                <TableHead className="w-[40%]">Name</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Added</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {isLoadingDocuments ? (
+                [...Array(8)].map((_, i) => (
+                 <TableRow key={`skel-${i}`}>
+                   <TableCell><Skeleton className="h-4 w-3/4" /></TableCell>
+                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                   <TableCell className="text-right"><Skeleton className="h-8 w-20 ml-auto" /></TableCell>
+                 </TableRow>
                ))
-             ) : (
-               <p className="text-xs text-slate-500 px-2">No categories found.</p>
-             )}
+              ) : documents.length > 0 ? (
+                 documents.map((doc) => {
+                   const docType = doc.document_type?.toLowerCase() || 'file';
+                   const docDateStr = doc.document_date || null;
+                   const uploadedDateStr = doc.uploaded_at;
+                   const docName = doc.original_filename || doc.file_path.split('/').pop() || 'Document'; 
 
-             {/* TODO: Add Date filtering section here */}
-             {/* <h3 className="text-xs font-semibold text-slate-500 uppercase mt-4 mb-2 px-2">Date</h3> ... */}
-             
-          </nav>
-          <div className="mt-auto flex-shrink-0">
-            <Link href="/profile" className="flex items-center p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">
-               <Settings className="mr-3 h-5 w-5" /> Settings
-            </Link>
-          </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-
-        {/* Center Content Area - UPDATED */}
-        <ResizablePanel 
-          defaultSize={isMobile ? 35 : 55} 
-          minSize={isMobile ? 30 : 40} 
-          className="flex flex-col p-3 md:p-6 overflow-hidden h-full max-h-full"
-        >
-          {/* --- RESTORE Integrated Upload Zone --- */}
-          <div className="mb-6 p-4 md:p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-800 flex-shrink-0">
-             {/* Update prop name from onUploadSuccess to onUploadComplete */}
-             <FileUpload onUploadComplete={handleUploadSuccess} /> 
-             {/* Ensure uploadStatus state is defined */}
-             {uploadStatus && ( 
-              // Make duplicate message yellow/warning color
-              <p className={`mt-4 text-sm font-medium ${uploadStatus.startsWith('File already exists') ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
-                 {uploadStatus}
-              </p>
-            )}
-          </div>
-          
-          {/* Document Display Area - UPDATED with Table */}
-          <h3 className="text-lg md:text-xl font-semibold mb-4 text-slate-900 dark:text-white capitalize flex-shrink-0">
-             {selectedFilter.type === 'special' ? `Document Explorer - ${selectedFilter.value}` : `Document Explorer - ${selectedFilter.value}`}
-             {isLoadingDocuments ? "" : ` (${documents.length})`}
-          </h3>
-          
-          {/* Scrollable Table Container - Made responsive */}
-          <div className="flex-grow overflow-auto border dark:border-slate-700 rounded-md h-0 min-h-0 max-h-[calc(100%-4rem)]"> 
-            <Table className="min-w-full">
-              <TableHeader className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10">
-                <TableRow>
-                  <TableHead className="w-[40%]">Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Added</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoadingDocuments ? (
-                  // Loading Skeletons for Table Rows
-                  [...Array(8)].map((_, i) => (
-                    <TableRow key={`skel-${i}`}>
-                      <TableCell><Skeleton className="h-4 w-3/4" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-8 w-20 ml-auto" /></TableCell>
+                   return (
+                    <TableRow key={doc.id}>
+                      <TableCell className="font-medium truncate" title={docName}>{docName}</TableCell>
+                      <TableCell>
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-xs capitalize">
+                          {docType}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-slate-600 dark:text-slate-400">
+                        {docDateStr ? new Date(docDateStr).toLocaleDateString() : '-'}
+                      </TableCell>
+                      <TableCell className="text-sm text-slate-600 dark:text-slate-400">
+                        {uploadedDateStr ? new Date(uploadedDateStr).toLocaleDateString() : '-'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="outline" size="sm" asChild>
+                           <a href={doc.document_url} target="_blank" rel="noopener noreferrer">Preview</a>
+                        </Button>
+                      </TableCell>
                     </TableRow>
-                  ))
-                ) : documents.length > 0 ? (
-                  // Actual Document Rows
-                  documents.map((doc) => {
-                    // Use the dedicated columns instead of extracted_data
-                    const docType = doc.document_type?.toLowerCase() || 'file';
-                    const docDateStr = doc.document_date || null;
-                    const uploadedDateStr = doc.uploaded_at;
-                    
-                    // Get a friendly name for the document
-                    const docName = doc.original_filename || doc.file_path.split('/').pop() || 'Document'; 
+                  );
+                })
+              ) : (
+                 <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center text-slate-500 dark:text-slate-400">
+                     <FileText size={30} className="mx-auto mb-2"/>
+                     No documents found matching this filter.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div> 
+      </div>
 
-                    return (
-                      <TableRow key={doc.id}>
-                        <TableCell className="font-medium truncate" title={docName}>{docName}</TableCell>
-                        <TableCell>
-                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-xs capitalize">
-                            {docType}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">
-                          {docDateStr ? new Date(docDateStr).toLocaleDateString() : '-'}
-                        </TableCell>
-                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">
-                          {uploadedDateStr ? new Date(uploadedDateStr).toLocaleDateString() : '-'}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="outline" size="sm" asChild>
-                             <a href={doc.document_url} target="_blank" rel="noopener noreferrer">Preview</a>
-                          </Button>
-                          {/* Add more actions later (e.g., Delete, Details) */}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                ) : (
-                  // Empty State Row
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-slate-500 dark:text-slate-400">
-                       <FileText size={30} className="mx-auto mb-2"/>
-                       No documents found matching this filter.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div> 
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-
-        {/* Right Chat Panel - Chat container needs improvements */}
-        <ResizablePanel 
-          defaultSize={isMobile ? 40 : 25} 
-          minSize={isMobile ? 25 : 20} 
-          maxSize={isMobile ? 60 : 35} 
-          className="bg-white dark:bg-neutral-dark border-l dark:border-slate-700 flex flex-col h-full max-h-full overflow-hidden"
-        >
-          {/* Header (stays the same) */}
-          <div className="p-4 border-b dark:border-slate-700 flex items-center justify-between">
+      {/* Right Chat Panel - Add horizontal padding matching header, remove left border if redundant */}
+      <div className="w-[400px] flex-shrink-0 bg-white dark:bg-neutral-dark border-l dark:border-slate-700 flex flex-col h-full max-h-full overflow-hidden px-4 sm:px-6 lg:px-8 py-4 md:py-6">
+         {/* Header - Remove padding if container has it */}
+         <div className="border-b dark:border-slate-700 flex items-center justify-between pb-4">
             <h2 className="text-lg font-semibold">Document Assistant</h2>
           </div>
-
-          {/* Chat Messages Container - IMPROVED SCROLLING */}
-          <div 
-            ref={chatContainerRef}
-            className="flex-grow overflow-y-auto p-4 space-y-4 h-0 min-h-0"
-          >
-            {chatMessages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 dark:text-slate-400 space-y-3">
-                <MessageSquare className="h-12 w-12" />
-                <div>
-                  <p className="font-medium">No messages yet</p>
-                  <p className="text-sm">Ask about your documents below</p>
-                </div>
-              </div>
-            ) : (
-              chatMessages.map((message, index) => (
-                <div 
-                  key={index} 
-                  className={`flex ${
-                    message.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  <div 
-                    className={`max-w-[85%] px-4 py-2 rounded-lg ${
-                      message.role === 'user'
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-slate-200 dark:bg-slate-700 dark:text-white'
-                    }`}
-                  >
-                    <div className="prose dark:prose-invert max-w-none">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                      >
-                        {typeof message.content === 'string' ? message.content : String(message.content)}
-                      </ReactMarkdown>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-            {isLoadingChat && (
-              <div className="flex justify-start">
-                <div className="bg-slate-200 dark:bg-slate-700 max-w-[85%] px-4 py-2 rounded-lg dark:text-white">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Input Section - IMPROVED FOR MOBILE */}
-          <div className="p-3 md:p-4 border-t dark:border-slate-700">
-            <form onSubmit={handleSendMessage} className="flex flex-col md:flex-row gap-2">
-              <Textarea
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask about your documents..."
-                className="flex-grow min-h-[60px] max-h-[120px]"
-              />
-              <Button 
-                type="submit" 
-                disabled={isLoadingChat || chatInput.trim() === ''} 
-                className="md:self-end"
-              >
-                {isLoadingChat ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                <span className="ml-2 md:hidden">Send</span>
-              </Button>
-            </form>
-          </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+          
+         {/* Chat Messages Container - Remove padding if container has it */}
+         <div 
+             ref={chatContainerRef}
+             className="flex-grow overflow-y-auto space-y-4 h-0 min-h-0 pt-4"
+           >
+             {chatMessages.length === 0 ? (
+               <div className="flex flex-col items-center justify-center h-full text-center text-slate-500 dark:text-slate-400 space-y-3">
+                 <MessageSquare className="h-12 w-12" />
+                 <div>
+                   <p className="font-medium">No messages yet</p>
+                   <p className="text-sm">Ask about your documents below</p>
+                 </div>
+               </div>
+             ) : (
+               chatMessages.map((message, index) => (
+                 <div 
+                   key={index} 
+                   className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                   <div 
+                     className={`max-w-[85%] px-4 py-2 rounded-lg ${message.role === 'user'? 'bg-blue-500 text-white': 'bg-slate-200 dark:bg-slate-700 dark:text-white'}`}>
+                     <div className="prose dark:prose-invert max-w-none">
+                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                         {typeof message.content === 'string' ? message.content : String(message.content)}
+                       </ReactMarkdown>
+                     </div>
+                   </div>
+                 </div>
+               ))
+             )}
+             {isLoadingChat && (
+               <div className="flex justify-start">
+                 <div className="bg-slate-200 dark:bg-slate-700 max-w-[85%] px-4 py-2 rounded-lg dark:text-white">
+                   <Loader2 className="h-5 w-5 animate-spin" />
+                 </div>
+               </div>
+             )}
+           </div>
+           
+         {/* Input Section - Should now be visible */} 
+         <div className="border-t dark:border-slate-700 pt-4">
+           <form onSubmit={handleSendMessage} className="flex flex-col md:flex-row gap-2">
+             <Textarea
+               value={chatInput}
+               onChange={(e) => setChatInput(e.target.value)}
+               placeholder="Ask about your documents..."
+               className="flex-grow min-h-[60px] max-h-[120px]"
+               onKeyDown={(e) => {
+                 // Check if Enter is pressed without Shift
+                 if (e.key === 'Enter' && !e.shiftKey) {
+                   e.preventDefault(); // Prevent newline
+                   // Check if input is not empty and not loading before sending
+                   if (chatInput.trim() && !isLoadingChat) {
+                     handleSendMessage(e as unknown as React.FormEvent); // Call submit handler
+                   }
+                 }
+               }}
+             />
+             <Button 
+               type="submit" 
+               disabled={isLoadingChat || chatInput.trim() === ''} 
+               className="md:self-end"
+             >
+               {isLoadingChat ? (
+                 <Loader2 className="h-4 w-4 animate-spin" />
+               ) : (
+                 <Send className="h-4 w-4" />
+               )}
+               <span className="ml-2 md:hidden">Send</span>
+             </Button>
+           </form>
+         </div>
+       </div>
     </div>
   );
 }

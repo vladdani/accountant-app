@@ -11,6 +11,8 @@ import {
 import { Facebook, Instagram, Linkedin, Twitter } from "lucide-react"
 
 function Footerdemo() {
+  const currentYear = new Date().getFullYear();
+
   return (
     <footer className="relative border-t bg-background text-foreground transition-colors duration-300">
       <div className="container mx-auto px-4 py-12 md:px-6 lg:px-8">
@@ -83,7 +85,7 @@ function Footerdemo() {
         </div>
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t pt-8 text-center md:flex-row">
           <p className="text-sm text-muted-foreground">
-            © 2025 PT Satu Sampai Seratus. All rights reserved.
+            © {currentYear} PT Satu Sampai Seratus. All rights reserved.
           </p>
           <nav className="flex gap-4 text-sm">
             <a href="#" className="transition-colors hover:text-primary">

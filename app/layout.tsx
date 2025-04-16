@@ -9,7 +9,7 @@ const geist = Geist({ subsets: ['latin'] });
 
 // Metadata export is valid again in a Server Component
 export const metadata = {
-  title: 'Digital Archive App',
+  title: 'CariNota',
   description: 'Smart Document Management for Indonesian Accountants',
 };
 

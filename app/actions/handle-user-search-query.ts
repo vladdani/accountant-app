@@ -34,7 +34,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) { throw new Error('Missing GOOGLE_GENERATIVE_AI_API_KEY environment variable.'); }
 if (!supabaseUrl || !supabaseAnonKey) { throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable.'); }
 const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
-const model = google('models/gemini-1.5-flash');
+const model = google('models/gemini-2.0-flash');
 const querySchema = z.object({ userQuery: z.string().min(1), chatHistory: z.array(z.custom<CoreMessage>()).optional(), });
 
 // ---+++ NEW Structured Query Tool Definition +++---
@@ -100,7 +100,7 @@ export async function handleUserSearchQueryAction(
 
   // --- Initial Message History ---
   const messages: CoreMessage[] = [
-    { role: 'system', content: 'You are a helpful assistant for managing documents. You can query documents based on structured fields like vendor, date, type, amount, and currency using the provided tool.' },
+    { role: 'system', content: 'You are a helpful assistant for managing documents. You can query documents based on structured fields like vendor, date, type, amount, and currency using the provided tool. When the user asks for specific data points (like transactions, amounts, dates for a vendor), extract and list that information clearly from the tool results. When the user asks for documents, provide a list of matching documents with key details (name, vendor, date, amount) based on the tool results. Always base your response on the data returned by the tool.' },
     ...chatHistory,
     { role: 'user', content: userQuery },
   ];
@@ -123,22 +123,20 @@ export async function handleUserSearchQueryAction(
       console.log('AI wants to call tools:', result.toolCalls);
       const toolCallResults: CoreMessage[] = [];
 
-      // Define an interface for the tool result content
+      // Define an interface for the tool result content (can contain results or error)
       interface ToolResultContent {
-        results?: string;
+        results?: string; // JSON string of StructuredQueryResult[]
         error?: string;
       }
 
       for (const toolCall of result.toolCalls) {
-        let toolCallResultContent: ToolResultContent; // Use the interface here
-        const toolName = toolCall.toolName; // Use const instead of let
+        let toolCallResultContent: ToolResultContent; 
+        const toolName = toolCall.toolName;
 
         console.log(`Processing tool call: ${toolName} with args:`, toolCall.args);
 
         try {
           if (toolName === 'query_documents') {
-            // Directly call the action, passing validated args
-            // Ensure args match the Zod schema defined in the tool
             const validatedArgs = queryDocumentsTool.parameters.parse(toolCall.args);
             const actionResult = await queryStructuredDocumentsAction(validatedArgs);
 
@@ -147,15 +145,12 @@ export async function handleUserSearchQueryAction(
               toolCallResultContent = { error: `Failed to query documents: ${actionResult.error || 'Unknown database error'}` };
             } else if (!actionResult.data || actionResult.data.length === 0) {
               console.log('queryStructuredDocumentsAction returned no results.');
-              toolCallResultContent = { results: "No documents found matching those criteria." };
+              toolCallResultContent = { results: "[]" }; // Send empty array as JSON string
             } else {
               console.log(`queryStructuredDocumentsAction returned ${actionResult.data.length} results.`);
-              // Summarize results for the AI
-               const summary = `Query found ${actionResult.data.length} document(s):\n` +
-                 actionResult.data.map(doc =>
-                     `- ${doc.name || `ID ${doc.id.substring(0,8)}...`}: Vendor=${doc.vendor || 'N/A'}, Date=${doc.document_date || 'N/A'}, Amt=${doc.total_amount !== null ? `${doc.total_amount} ${doc.currency || ''}`.trim() : 'N/A'}`
-                 ).join('\n');
-              toolCallResultContent = { results: summary };
+              // Pass the actual structured data back to the AI as a JSON string.
+              const resultsJsonString = JSON.stringify(actionResult.data, null, 2);
+              toolCallResultContent = { results: resultsJsonString }; 
             }
           } else {
             console.warn(`Unsupported tool requested: ${toolName}`);
@@ -166,48 +161,64 @@ export async function handleUserSearchQueryAction(
           toolCallResultContent = { error: `Error processing tool ${toolName}: ${error instanceof Error ? error.message : String(error)}` };
         }
 
-        // Append the tool result message with the correct content structure
+        // Append the tool result message
         toolCallResults.push({
           role: 'tool',
-          content: [ // Content IS an array here
+          content: [
             { 
-              type: 'tool-result', // Specify the type
-              toolCallId: toolCall.toolCallId, // Include toolCallId inside
-              toolName: toolName, // Add toolName here
-              result: toolCallResultContent // The result object (not stringified)
+              type: 'tool-result',
+              toolCallId: toolCall.toolCallId,
+              toolName: toolName,
+              result: toolCallResultContent // Contains { results: "[...]" } or { error: "..." }
             }
           ]
         });
-      }
+      } // End for loop over toolCalls
 
-      // Append the AI's text response and the tool results
-      messages.push({ // Create assistant message manually
+      // Construct the assistant message containing the initial response + tool calls
+      const assistantMessageWithToolCalls: CoreMessage = {
         role: 'assistant',
-        content: result.text || '' // Use the text response
-      });
-      messages.push(...toolCallResults); // Add the tool results separately
+        content: [
+          // Include assistant's text response (if any)
+          ...(result.text ? [{ type: 'text' as const, text: result.text }] : []), 
+          // Map the tool calls into the content array
+          ...result.toolCalls.map((tc) => ({
+            type: 'tool-call' as const, 
+            toolCallId: tc.toolCallId,
+            toolName: tc.toolName,
+            args: tc.args,
+          })),
+        ],
+      };
       
-      // Remove the incorrect attempt to push result.message
-      // messages.push(result.message); 
+      // Add assistant message and tool results to history
+      messages.push(assistantMessageWithToolCalls); 
+      messages.push(...toolCallResults); 
 
       console.log("--- Sending to AI (Next Call with Tool Results) ---");
       console.log(JSON.stringify(messages, null, 2));
 
-      // Call generateText again with the updated messages
+      // Call generateText again
       result = await generateText({
         model: model,
         messages: messages,
-        tools: { query_documents: queryDocumentsTool }, // Keep tools available if needed again
+        tools: { query_documents: queryDocumentsTool }, 
       });
 
       console.log("--- Received from AI (After Tool Call) ---", result);
-    }
+    } // End while loop (tool-calls)
     // -------------------------------------------
 
     // --- Final Response --- 
     if (result.finishReason === 'stop') {
       console.log('AI stopped, final response:', result.text);
-      return { success: true, response: result.text };
+      // Ensure result.text is not null or undefined before returning
+      if (result.text) {
+          return { success: true, response: result.text };
+      } else {
+          console.error('AI stopped but provided no text response.');
+          return { success: false, error: 'AI completed processing but did not provide a response.' };
+      }
     } else {
       console.error('Unexpected final finish reason:', result.finishReason, result.toolCalls);
       return { success: false, error: `AI processing ended unexpectedly with reason: ${result.finishReason}.` };
@@ -219,6 +230,11 @@ export async function handleUserSearchQueryAction(
     console.error('Error in handleUserSearchQueryAction:', err);
     const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
     if (errorMessage.includes('API key') || errorMessage.includes('quota')) { return { success: false, error: `AI API Error: ${errorMessage}`}; }
+    // Add a specific check for the empty content error
+    if (errorMessage.includes('GenerateContentRequest.content.contents.parts must not be empty')) {
+        console.error('Detected empty content error. Review message history construction.');
+        return { success: false, error: 'AI request failed due to empty content. Please check the logs.' };
+    }
     return { success: false, error: errorMessage };
   }
-} 
+} // End of handleUserSearchQueryAction
