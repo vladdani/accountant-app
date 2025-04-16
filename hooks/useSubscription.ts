@@ -31,7 +31,7 @@ export interface Subscription {
 }
 
 export function useSubscription() {
-  const { user, supabase } = useAuth();
+  const { user, supabaseClient } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +41,7 @@ export function useSubscription() {
   const checkServerUpdates = useCallback(async (userId: string, lastChecked: number): Promise<boolean> => {
     try {
       // Check user_preferences table for updated_at
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('user_preferences')
         .select('updated_at')
         .eq('user_id', userId)
@@ -64,7 +64,7 @@ export function useSubscription() {
       console.error('Failed to check for subscription updates:', err);
       return false; // On error, default to false (no updates)
     }
-  }, [supabase]);
+  }, [supabaseClient]);
 
   const fetchSubscription = useCallback(async (skipCache = false) => {
     if (!user?.id) {
@@ -102,7 +102,7 @@ export function useSubscription() {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('subscriptions')
         .select('*')
         .eq('user_id', user.id)
@@ -134,7 +134,7 @@ export function useSubscription() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, supabase, checkServerUpdates]);
+  }, [user?.id, supabaseClient, checkServerUpdates]);
 
   useEffect(() => {
     if (user?.id) {
@@ -190,7 +190,7 @@ export function useSubscription() {
   useEffect(() => {
     if (!user) return;
 
-    const channel = supabase
+    const channel = supabaseClient
       .channel('subscription_updates')
       .on(
         'postgres_changes',
@@ -211,9 +211,9 @@ export function useSubscription() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabaseClient.removeChannel(channel);
     };
-  }, [user, supabase, checkValidSubscription]);
+  }, [user, supabaseClient, checkValidSubscription]);
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
