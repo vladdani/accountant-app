@@ -79,6 +79,8 @@ export async function uploadFile(formData: FormData): Promise<UploadResult> {
     console.error('Auth error in uploadFile:', authError);
     return { success: false, error: `User not authenticated: ${authError?.message || 'No user found'}` };
   }
+  // Add specific log for the retrieved user ID
+  console.log("--- uploadFile Action: User ID retrieved from getUser():", user.id);
   console.log("User authenticated:", user.id);
   // --- END AUTH RESTORE ---
 
