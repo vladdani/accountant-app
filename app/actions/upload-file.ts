@@ -210,7 +210,8 @@ export async function uploadFile(formData: FormData): Promise<UploadResult> {
     if (dbRecordId) {
       console.log(`Starting AI extraction for document ID: ${dbRecordId}`);
       try {
-        const extractionPrompt = `You are an expert accountant assistant. Analyze the content of the provided file (image or PDF). Extract the following fields:\n        - vendor (string): The name of the vendor/supplier/seller.\n        - date (string): The primary date on the document (e.g., invoice date, receipt date) in YYYY-MM-DD format.\n        - type (string): Classify the document type (e.g., 'invoice', 'receipt', 'agreement', 'bank_statement', 'quote', 'other').\n        - amount (number): The main total amount. Extract only the numeric value, removing any currency symbols or thousand separators.\n        - currency (string): The 3-letter currency code (e.g., 'IDR', 'USD', 'EUR') associated with the total amount. If no currency symbol/code is found, try to infer based on context or vendor location if possible, otherwise use null.\n        - description (string): A brief summary of the document content or a list of main items/services (e.g., 'Purchase of office supplies', 'Monthly software subscription', 'Consulting services agreement'). Use null if no clear description is found.\n        - discount (number): Any discount amount applied to the total. Extract only the numeric value. Use null if no discount is mentioned.\n\n        Return the result ONLY as a valid JSON object with these exact keys: "vendor", "date", "type", "amount", "currency", "description", "discount".\n        If a field cannot be determined, use a JSON null value for that key. Do not include any explanation or surrounding text. Ensure 'amount' and 'discount' are numbers, not strings.`;
+        // Updated Prompt to consider filename
+        const extractionPrompt = `You are an expert accountant assistant. Analyze the content of the provided file (image or PDF). Also consider the filename for context. Extract the following fields:\n        - vendor (string): The name of the vendor/supplier/seller.\n        - date (string): The primary date on the document (e.g., invoice date, receipt date) in YYYY-MM-DD format.\n        - type (string): Classify the document type (e.g., 'invoice', 'receipt', 'agreement', 'bank_statement', 'quote', 'other'). Use the filename as a hint if it contains relevant keywords like 'invoice', 'quote', 'receipt', 'agreement', etc.\n        - amount (number): The main total amount. Extract only the numeric value, removing any currency symbols or thousand separators.\n        - currency (string): The 3-letter currency code (e.g., 'IDR', 'USD', 'EUR') associated with the total amount. If no currency symbol/code is found, try to infer based on context or vendor location if possible, otherwise use null.\n        - description (string): A brief summary of the document content or a list of main items/services (e.g., 'Purchase of office supplies', 'Monthly software subscription', 'Consulting services agreement'). Use null if no clear description is found.\n        - discount (number): Any discount amount applied to the total. Extract only the numeric value. Use null if no discount is mentioned.\n\n        Return the result ONLY as a valid JSON object with these exact keys: "vendor", "date", "type", "amount", "currency", "description", "discount".\n        If a field cannot be determined, use a JSON null value for that key. Do not include any explanation or surrounding text. Ensure 'amount' and 'discount' are numbers, not strings.`;
 
         // Prepare parts for the official SDK
         const textPart: Part = { text: extractionPrompt };
@@ -220,11 +221,12 @@ export async function uploadFile(formData: FormData): Promise<UploadResult> {
                 mimeType: file.type,
             },
         };
+        // Add filename as a text part? No, include instruction in main prompt.
 
         // Call official SDK's generateContent
         const result = await extractionModel.generateContent({
             contents: [{ role: "user", parts: [textPart, imagePart] }],
-            // generationConfig: { responseMimeType: "application/json" } // Optional: Request JSON directly if model supports
+            // generationConfig: { responseMimeType: "application/json" } 
         });
 
         const response = result.response;
