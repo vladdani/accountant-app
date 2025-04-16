@@ -428,7 +428,7 @@ export default function Dashboard() {
         });
       }
     };
-  }, [processingDocId, supabase, fetchDocuments, fetchTypes]); // Add dependencies
+  }, [processingDocId, supabase]);
   // ---++++++++++++++++++++++++++++++++++++++++++++++---
 
   // --- Helper Functions --- 
