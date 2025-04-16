@@ -30,6 +30,7 @@ export interface Database {
           document_type: string | null
           total_amount: number | null
           currency: string | null
+          processing_time_ms: number | null
         }
         Insert: {
           id?: string
@@ -60,6 +61,7 @@ export interface Database {
           document_type?: string | null
           total_amount?: number | null
           currency?: string | null
+          processing_time_ms?: number | null
         }
       }
       subscriptions: {

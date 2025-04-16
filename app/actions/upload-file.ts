@@ -62,6 +62,7 @@ const extractionModel = genAI.getGenerativeModel({
 
 export async function uploadFile(formData: FormData): Promise<UploadResult> {
   console.log("--- Running Full uploadFile Action --- ");
+  const startTime = Date.now(); // Record start time
 
   // <<< Create Supabase client for Server Actions using @supabase/ssr >>>
   const supabaseUserClient = await createServerClientFromUtils();
@@ -308,9 +309,30 @@ export async function uploadFile(formData: FormData): Promise<UploadResult> {
 
       } catch (aiError) {
         console.error(`Error during AI extraction for document ${dbRecordId}:`, aiError);
+        // Decide if you want to update processing time even if AI fails
+        // For now, we proceed to update time regardless.
       }
+      
+      // --- Calculate and Store Processing Time ---
+      const endTime = Date.now();
+      const processingTimeMs = endTime - startTime;
+      console.log(`Document ${dbRecordId} processing time: ${processingTimeMs} ms`);
+      
+      const { error: timeUpdateError } = await supabaseAdmin
+        .from('documents')
+        .update({ processing_time_ms: processingTimeMs })
+        .eq('id', dbRecordId);
+        
+      if (timeUpdateError) {
+           console.error(`Failed to update processing time for doc ${dbRecordId}:`, timeUpdateError);
+           // Non-critical error, maybe log to monitoring service
+      } else {
+           console.log(`Successfully updated processing time for doc ${dbRecordId}.`);
+      }
+      // ------------------------------------------
+      
     } else {
-       console.warn("No DB record ID for AI extraction.");
+       console.warn("No DB record ID, skipping AI extraction and time update.");
     }
     // ---+++ End AI Extraction Step +++---
 
