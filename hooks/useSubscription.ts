@@ -45,15 +45,22 @@ export function useSubscription() {
         .from('user_preferences')
         .select('updated_at')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle(); // Use maybeSingle to handle 0 or 1 row without error
       
-      if (error) {
-        console.error('Error checking for subscription updates:', error);
-        return false;
+      // Handle potential errors (excluding "Not Found" which is okay here)
+      if (error && error.code !== 'PGRST116') { 
+        console.error('Error checking for subscription updates (user_preferences):', error);
+        return false; // Assume no updates on error
       }
       
-      // If server has no timestamp or client has no lastChecked, force update
-      if (!data?.updated_at || !lastChecked) {
+      // If no preference record exists (data is null), assume no specific update trigger
+      if (!data?.updated_at) {
+        console.log('No user_preferences record found or no updated_at timestamp, assuming no server update trigger.');
+        return false; // No record means no preference-based update trigger
+      }
+      
+      // If client has no lastChecked, force update
+      if (!lastChecked) {
         return true;
       }
       

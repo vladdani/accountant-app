@@ -36,14 +36,19 @@ export function useTrialStatus() {
         return;
       }
 
+      // Check if user has an existing trial using the passed client
+      console.log(`[useTrialStatus] Attempting to fetch trial for user: ${user.id}`);
       const { data: trial, error: trialError } = await client
         .from('user_trials')
         .select('trial_end_time, is_trial_used')
         .eq('user_id', user.id)
         .maybeSingle();
 
+      // Log the result immediately
+      console.log(`[useTrialStatus] Fetch result: data=${JSON.stringify(trial)}, error=${JSON.stringify(trialError)}`);
+
       if (trialError && trialError.code !== 'PGRST116') {
-        console.error('Error fetching trial record:', trialError);
+        console.error('[useTrialStatus] Error fetching trial record:', trialError);
         throw trialError;
       }
 
