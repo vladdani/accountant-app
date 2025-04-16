@@ -24,6 +24,8 @@ interface StructuredQueryResult {
   document_type: string | null;
   total_amount: number | null;
   currency: string | null;
+  description: string | null;
+  discount: number | null;
 }
 
 // Ensure necessary env vars are loaded (should be already from global scope, but good practice)
@@ -72,7 +74,9 @@ export async function queryStructuredDocumentsAction(
         document_date,
         document_type,
         total_amount,
-        currency
+        currency,
+        description,
+        discount
       `)
       .eq('uploaded_by', authenticatedUserId);
 
@@ -123,7 +127,9 @@ export async function queryStructuredDocumentsAction(
       document_date: item.document_date,
       document_type: item.document_type,
       total_amount: item.total_amount,
-      currency: item.currency
+      currency: item.currency,
+      description: item.description,
+      discount: item.discount
     })) : [];
     
     return { success: true, data: resultData };

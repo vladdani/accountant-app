@@ -31,6 +31,9 @@ export interface Database {
           total_amount: number | null
           currency: string | null
           processing_time_ms: number | null
+          description: string | null
+          discount: number | null
+          content_hash: string | null
         }
         Insert: {
           id?: string
@@ -46,6 +49,9 @@ export interface Database {
           document_type?: string | null
           total_amount?: number | null
           currency?: string | null
+          description?: string | null
+          discount?: number | null
+          content_hash?: string | null
         }
         Update: {
           id?: string
@@ -62,6 +68,9 @@ export interface Database {
           total_amount?: number | null
           currency?: string | null
           processing_time_ms?: number | null
+          description?: string | null
+          discount?: number | null
+          content_hash?: string | null
         }
       }
       subscriptions: {

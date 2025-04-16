@@ -257,7 +257,9 @@ export default function LandingPage() {
       <main className="flex-1">
         <Hero />
         <KeyFeatures />
-        <Pricing plans={pricingPlans} />
+        <div className="flex justify-center w-full">
+          <Pricing plans={pricingPlans} />
+        </div>
         <Testimonials />
         <Faq />
       </main>

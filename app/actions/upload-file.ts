@@ -40,6 +40,8 @@ interface AiExtractionResult { // Define expected AI response structure
   type: string | null;
   amount: number | null;
   currency: string | null;
+  description: string | null;
+  discount: number | null;
 }
 
 // Environment variable checks remain the same
@@ -178,17 +180,19 @@ export async function uploadFile(formData: FormData): Promise<UploadResult> {
     const { data: dbData, error: dbError } = await supabaseAdmin
       .from('documents')
       .insert({
-        uploaded_by: user.id, // Using test user ID
+        uploaded_by: user.id,
         document_url: publicUrl,
         file_path: filePath,
         original_filename: file.name, 
-        content_hash: fileHashHex, // <-- ADDED: Store the content hash
+        content_hash: fileHashHex,
         // Initialize new fields as NULL initially
         vendor: null,
         document_date: null,
         document_type: null,
         total_amount: null,
         currency: null,
+        description: null,
+        discount: null
       })
       .select('id') 
       .single();
@@ -199,14 +203,14 @@ export async function uploadFile(formData: FormData): Promise<UploadResult> {
       await supabaseAdmin.storage.from('documents').remove([filePath]).catch(console.error);
       throw new Error('Failed to create document record after upload.');
     }
-    dbRecordId = dbData?.id; // Store the ID
+    dbRecordId = dbData?.id;
     console.log("DB record inserted successfully. ID:", dbRecordId);
 
     // ---+++ NEW: AI Extraction Step +++---
     if (dbRecordId) {
       console.log(`Starting AI extraction for document ID: ${dbRecordId}`);
       try {
-        const extractionPrompt = `You are an expert accountant assistant. Analyze the content of the provided file (image or PDF). Extract the following fields:\n        - vendor (string): The name of the vendor/supplier/seller.\n        - date (string): The primary date on the document (e.g., invoice date, receipt date) in YYYY-MM-DD format.\n        - type (string): Classify the document type (e.g., 'invoice', 'receipt', 'agreement', 'bank_statement', 'other').\n        - amount (number): The main total amount. Extract only the numeric value, removing any currency symbols or thousand separators.\n        - currency (string): The currency code (e.g., 'IDR', 'USD', 'EUR') associated with the total amount. If no currency symbol/code is found, try to infer based on context or vendor location if possible, otherwise null.\n\n        Return the result ONLY as a valid JSON object with these exact keys: "vendor", "date", "type", "amount", "currency".\n        If a field cannot be determined, use a JSON null value for that key. Do not include any explanation or surrounding text. Ensure the 'amount' is a number, not a string.`;
+        const extractionPrompt = `You are an expert accountant assistant. Analyze the content of the provided file (image or PDF). Extract the following fields:\n        - vendor (string): The name of the vendor/supplier/seller.\n        - date (string): The primary date on the document (e.g., invoice date, receipt date) in YYYY-MM-DD format.\n        - type (string): Classify the document type (e.g., 'invoice', 'receipt', 'agreement', 'bank_statement', 'quote', 'other').\n        - amount (number): The main total amount. Extract only the numeric value, removing any currency symbols or thousand separators.\n        - currency (string): The 3-letter currency code (e.g., 'IDR', 'USD', 'EUR') associated with the total amount. If no currency symbol/code is found, try to infer based on context or vendor location if possible, otherwise use null.\n        - description (string): A brief summary of the document content or a list of main items/services (e.g., 'Purchase of office supplies', 'Monthly software subscription', 'Consulting services agreement'). Use null if no clear description is found.\n        - discount (number): Any discount amount applied to the total. Extract only the numeric value. Use null if no discount is mentioned.\n\n        Return the result ONLY as a valid JSON object with these exact keys: "vendor", "date", "type", "amount", "currency", "description", "discount".\n        If a field cannot be determined, use a JSON null value for that key. Do not include any explanation or surrounding text. Ensure 'amount' and 'discount' are numbers, not strings.`;
 
         // Prepare parts for the official SDK
         const textPart: Part = { text: extractionPrompt };
@@ -258,8 +262,16 @@ export async function uploadFile(formData: FormData): Promise<UploadResult> {
         }
 
         // Validate and prepare data for DB update, using Partial for type safety
-        // Use correct DB column names: vendor, document_date, document_type, total_amount, currency
-        const updatePayload: Partial<{ vendor: string | null; document_date: string | null; document_type: string | null; total_amount: number | null; currency: string | null; }> = {};
+        // Use correct DB column names
+        const updatePayload: Partial<{ 
+          vendor: string | null; 
+          document_date: string | null; 
+          document_type: string | null; 
+          total_amount: number | null; 
+          currency: string | null; 
+          description: string | null;
+          discount: number | null;
+        }> = {};
         if (extractedData) {
             if (extractedData.vendor) updatePayload.vendor = extractedData.vendor;
             if (extractedData.date && typeof extractedData.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(extractedData.date)) {
@@ -269,7 +281,7 @@ export async function uploadFile(formData: FormData): Promise<UploadResult> {
             }
 
             if (extractedData.type) updatePayload.document_type = extractedData.type;
-
+            
             let parsedAmount: number | null = null;
             if (extractedData.amount !== null && extractedData.amount !== undefined) {
                 if(typeof extractedData.amount === 'number' && !isNaN(extractedData.amount)) {
@@ -282,13 +294,30 @@ export async function uploadFile(formData: FormData): Promise<UploadResult> {
             if(parsedAmount !== null) {
                 updatePayload.total_amount = parsedAmount;
             } else if (extractedData.amount !== null && extractedData.amount !== undefined) {
-                console.warn(`Could not parse amount from AI for doc ${dbRecordId}: ${extractedData.amount}`);
+                 console.warn(`Could not parse amount from AI for doc ${dbRecordId}: ${extractedData.amount}`);
             }
 
             if (extractedData.currency && typeof extractedData.currency === 'string' && extractedData.currency.length > 0) {
                 updatePayload.currency = extractedData.currency.toUpperCase();
             } else if (extractedData.currency !== null && extractedData.currency !== undefined) {
                  console.warn(`Invalid currency from AI for doc ${dbRecordId}: ${extractedData.currency}`);
+            }
+
+            if (extractedData.description) updatePayload.description = extractedData.description;
+
+            let parsedDiscount: number | null = null;
+            if (extractedData.discount !== null && extractedData.discount !== undefined) {
+                if(typeof extractedData.discount === 'number' && !isNaN(extractedData.discount)) {
+                    parsedDiscount = extractedData.discount;
+                } else if (typeof extractedData.discount === 'string') {
+                    const num = parseFloat(String(extractedData.discount).replace(/[^0-9.-]+/g,""));
+                    if (!isNaN(num)) parsedDiscount = num;
+                }
+            }
+             if(parsedDiscount !== null) {
+                updatePayload.discount = parsedDiscount;
+            } else if (extractedData.discount !== null && extractedData.discount !== undefined) {
+                 console.warn(`Could not parse discount from AI for doc ${dbRecordId}: ${extractedData.discount}`);
             }
         }
 
