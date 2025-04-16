@@ -19,23 +19,25 @@ export function useTrialStatus() {
     setIsLoading(true);
 
     try {
-      const { data: subscription } = await client
+      /* // --- Start TEMP Block - Bypass Subscription Check ---
+      const { data: subscription } = await client 
         .from('subscriptions')
         .select('status')
         .eq('user_id', user.id)
         .in('status', ['active', 'trialing'])
         .maybeSingle();
 
-      if (subscription) {
-        console.log('User has active/trialing subscription, skipping trial check.');
+      if (subscription) { 
+        console.log('[useTrialStatus - TEMP BYPASS] User has active/trialing subscription, setting isInTrial=false.');
         setTrialStatus({
-          isInTrial: false,
+          isInTrial: false, 
           trialEndTime: null
         });
         setIsLoading(false);
         return;
       }
-
+      */ // --- End TEMP Block ---
+      
       // Check if user has an existing trial using the passed client
       const userId = user.id;
       console.log(`[useTrialStatus] Using user ID for query: ${userId}`);
