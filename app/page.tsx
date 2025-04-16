@@ -186,7 +186,7 @@ const featureCards = [
 const pricingPlans = [
   {
     name: "Starter",
-    price: "450000", // Price as string for formatting
+    price: "120000", // Price as string for formatting
     yearlyPrice: "0", // Not used, but needed by interface
     period: "per month",
     features: [
@@ -194,14 +194,14 @@ const pricingPlans = [
       "Slower AI model",
       "72-hour support response time",
     ],
-    description: "Micro Company",
+    description: "Perfect for micro businesses who have no accountant or admin but want to keep track of their documents.",
     buttonText: "Get Started", // Or choose appropriate text
     href: "https://buy.stripe.com/00g9BO0rUdVz3C028b", // Update link
     isPopular: false,
   },
   {
     name: "Professional",
-    price: "890000",
+    price: "550000",
     yearlyPrice: "0",
     period: "per month",
     features: [
@@ -210,7 +210,7 @@ const pricingPlans = [
       "12-hour support response time",
       "Exports",
     ],
-    description: "Small Business",
+    description: "Perfect for small and medium sized companies who have 1000+ documents a month and want to keep their documents tidy and organized.",
     buttonText: "Get Started",
     href: "https://buy.stripe.com/4gwdS4fmO18Na0o9AE", // Update link
     isPopular: true, // Make this popular
@@ -227,7 +227,7 @@ const pricingPlans = [
       "Exports",
       "Custom Integrations",
     ],
-    description: "Enterprise",
+    description: "A highly customized plan for big businesses with 10,000+ documents a month.",
     buttonText: "Contact Sales",
     href: "/contact", // Link to contact page
     isPopular: false,

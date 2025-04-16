@@ -44,7 +44,7 @@ export function Pricing({
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 sm:2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 sm:2 gap-4 max-w-5xl mx-auto">
         {plans.map((plan, index) => {
           const isNumericPrice = !isNaN(parseFloat(plan.price));
 
