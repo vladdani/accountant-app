@@ -4,6 +4,7 @@ import TopBar from '../components/TopBar';
 import { Analytics } from "@vercel/analytics/react";
 import { Providers } from "./providers";
 import { MainContentWrapper } from "@/components/layout/main-content-wrapper";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geist = Geist({ subsets: ['latin'] });
 
@@ -25,6 +26,7 @@ export default function RootLayout({
             <Analytics mode="auto" />
             <TopBar />
             <MainContentWrapper>{children}</MainContentWrapper>
+            <SpeedInsights />
         </Providers>
       </body>
     </html>

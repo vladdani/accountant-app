@@ -31,6 +31,7 @@
     "@supabase/supabase-js": "^2.47.10",
     "@types/stripe": "^8.0.416",
     "@vercel/analytics": "^1.4.1",
+    "@vercel/speed-insights": "^1.2.0",
     "ai": "^4.3.4",
     "axios": "^1.7.9",
     "canvas-confetti": "^1.9.3",
