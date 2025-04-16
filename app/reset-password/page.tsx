@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 function ResetPasswordContent() {
-  const { supabase } = useAuth();
+  const { supabaseClient } = useAuth();
   const searchParams = useSearchParams();
   const email = searchParams.get('email');
   const [error, setError] = useState('');
@@ -27,7 +27,7 @@ function ResetPasswordContent() {
     setError('');
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/update-password#`,
       });
       if (error) throw error;
