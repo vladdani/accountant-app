@@ -115,7 +115,7 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
         console.log("Finished processing batch.");
       }
     },
-    [onUploadComplete]
+    [onUploadComplete, acceptedFiles.length]
   );
 
   const { 
