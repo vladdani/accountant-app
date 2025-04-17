@@ -1,83 +1,71 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  MessageSquareText,
-  ScanSearch,
-  Search,
-  Globe,
-  ShieldCheck,
-  Zap,
-} from "lucide-react";
+import { FeaturesSectionWithHoverEffects } from "@/components/blocks/feature-section-with-hover-effects";
 
-const features = [
+const whyCariNota = [
   {
-    icon: <MessageSquareText className="h-8 w-8 text-primary" />,
-    title: "WhatsApp Integration (coming soon)",
+    icon: "📦",
+    title: "Never Lose a Receipt Again",
     description:
-      "Send documents directly through WhatsApp for seamless integration with your existing workflow.",
+      "CariNota instantly organizes every uploaded invoice, receipt, and document—so you can find exactly what you need, months later, without digging through folders.",
   },
   {
-    icon: <ScanSearch className="h-8 w-8 text-primary" />,
-    title: "Automatic Extraction",
+    icon: "⏱️",
+    title: "Save Hours Every Week",
     description:
-      "Our AI automatically extracts key information from invoices, receipts, and financial documents.",
+      "Stop wasting time looking for old transactions. Just ask in plain language—\"Invoices from January over Rp 5 million\"—and get answers in seconds.",
   },
   {
-    icon: <Search className="h-8 w-8 text-primary" />,
-    title: "Semantic Search",
+    icon: "🔐",
+    title: "Feel Ready for Any Audit",
     description:
-      "Find documents using natural language queries in both Indonesian and English.",
+      "Export a clean, organized list of transactions with full documentation attached. Your books are always audit-ready—no last-minute panic.",
   },
   {
-    icon: <Globe className="h-8 w-8 text-primary" />,
-    title: "Multilingual Support",
+    icon: "📲",
+    title: "Send Files on WhatsApp, Forget About It",
     description:
-      "Full support for Indonesian and English language documents and search queries.",
+      "Forward bills and invoices to CariNota's WhatsApp number. They'll be filed, tagged, and searchable—without logging in.",
   },
   {
-    icon: <ShieldCheck className="h-8 w-8 text-primary" />,
-    title: "Compliance Ready",
+    icon: "🔎",
+    title: "Find Anything, in Any Language",
     description:
-      "Designed with Indonesian accounting standards and regulations in mind.",
+      "CariNota understands both English and Indonesian. Ask about supplier names, dates, amounts, or document types—in your words.",
   },
   {
-    icon: <Zap className="h-8 w-8 text-primary" />,
-    title: "Time Saving",
+    icon: "🧾",
+    title: "Know What Was Spent, When, and on What",
     description:
-      "Reduce document search time by up to 90% with our intelligent organization system.",
+      "Instantly see how much you spent with a supplier last quarter. Or which purchases exceeded budget. All backed by real documents.",
+  },
+  {
+    icon: "🔄",
+    title: "Simple for Everyone",
+    description:
+      "No training needed. Just upload your documents—admins, accountants, and owners can use it right away.",
+  },
+  {
+    icon: "🇮🇩",
+    title: "Built for Indonesian Businesses",
+    description:
+      "CariNota is designed for local formats, taxes, compliance rules, and your way of working—not adapted from a foreign system.",
   },
 ];
 
-export function KeyFeatures() {
+export function WhyCariNota() {
   return (
     <section id="features" className="w-full py-12 md:py-24 lg:py-32 bg-muted/40">
       <div className="container mx-auto px-4 md:px-6">
         <div className="flex flex-col items-center justify-center space-y-4 text-center mb-12">
           <div className="space-y-2">
             <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-foreground">
-              Key Features
+              Why CariNota?
             </h2>
             <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-              Our platform streamlines document management for accounting professionals, saving you time and reducing manual effort.
+              Stop drowning in paperwork. CariNota simplifies document management so you can focus on growing your business.
             </p>
           </div>
         </div>
-        <div className="mx-auto grid items-start gap-8 sm:max-w-4xl sm:grid-cols-2 md:gap-12 lg:max-w-5xl lg:grid-cols-3">
-          {features.map((feature) => (
-            <Card key={feature.title} className="bg-background shadow-sm hover:shadow-md transition-shadow duration-300">
-              <CardHeader className="flex flex-row items-center gap-4 pb-2">
-                {feature.icon}
-                <CardTitle className="text-lg font-semibold">
-                  {feature.title}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  {feature.description}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <FeaturesSectionWithHoverEffects features={whyCariNota} />
       </div>
     </section>
   );

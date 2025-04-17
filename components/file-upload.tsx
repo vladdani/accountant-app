@@ -4,6 +4,8 @@ import React, { useCallback, useState } from 'react';
 import { useDropzone, FileRejection, Accept } from 'react-dropzone';
 import { UploadCloud, X, File as FileIcon } from 'lucide-react';
 import { uploadFile } from '@/app/actions/upload-file'; // Import the server action
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button'; // Import Button component
 
 // Define accepted file types based on PRD
 const acceptedFileTypes: Accept = {
@@ -116,7 +118,15 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
     [onUploadComplete]
   );
 
-  const { getRootProps, getInputProps, isDragActive, isFocused, isDragAccept, isDragReject } = useDropzone({
+  const { 
+    getRootProps, 
+    getInputProps, 
+    open, // Destructure the open function
+    isDragActive, 
+    isFocused, 
+    isDragAccept, 
+    isDragReject 
+  } = useDropzone({
     onDrop,
     accept: acceptedFileTypes,
     multiple: true, // <-- CHANGE: Allow multiple files
@@ -146,7 +156,8 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
 
   return (
     <div className="w-full max-w-lg mx-auto">
-      <div {...getRootProps({ className: style })}>
+      {/* Hide the visual dropzone box on mobile, retain underlying input functionality */}
+      <div {...getRootProps({ className: cn(style, "hidden md:flex") })}>
         <input {...getInputProps()} disabled={isUploading}/>
         <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
           <UploadCloud className={`w-10 h-10 mb-4 ${isUploading ? 'text-muted-foreground' : isDragAccept ? 'text-green-500' : isDragReject ? 'text-destructive' : 'text-muted-foreground'}`} />
@@ -167,7 +178,16 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
         </div>
       </div>
 
-      {/* Remove separate isUploading indicator, handled in dropzone text now */}
+      {/* Mobile Upload Button */} 
+      <Button 
+        onClick={open} 
+        disabled={isUploading}
+        className="w-full md:hidden mt-4" // Visible only on mobile, full width, margin top
+        variant="outline" // Or use default variant
+      >
+        <UploadCloud className="mr-2 h-4 w-4" />
+        {isUploading ? 'Uploading...' : 'Upload File'}
+      </Button>
 
       {uploadError && (
           <div className="mt-4 text-center text-sm text-destructive font-medium">

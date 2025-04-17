@@ -5,6 +5,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/utils/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 // import { PostgrestError } from '@supabase/supabase-js';
+import { cn } from '@/lib/utils'; // Import cn utility
 
 // import { useRouter } from 'next/navigation';
 // import { useSubscription } from '@/hooks/useSubscription';
@@ -31,6 +32,7 @@ import {
   MessageSquare,
   Send,
   Loader2,
+  Menu,
 } from 'lucide-react';
 // import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 // import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // No longer used
@@ -125,16 +127,12 @@ export default function Dashboard() {
   const [isLoadingCount, setIsLoadingCount] = useState(true); // Loading state for count
 
   // State for chat
+  const chatLocalStorageKey = user ? `chatHistory-${user.id}` : null; // Key for localStorage
   const [chatInput, setChatInput] = useState<string>("");
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: `asst-init-${Date.now()}`,
-      role: 'assistant',
-      content: "Hi! I'm your document assistant. How can I help you search through your documents today?",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
-  ]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]); // Initialize empty
   const [isLoadingChat, setIsLoadingChat] = useState<boolean>(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false); // State for mobile sidebar
+  const [mobileView, setMobileView] = useState<'chat' | 'documents'>('chat'); // State for mobile view ('chat' or 'documents')
   const chatContainerRef = useRef<HTMLDivElement>(null); 
 
   // --- Helper Functions for Data Fetching ---
@@ -331,6 +329,57 @@ export default function Dashboard() {
     // Ensure dependencies are correct for this single listener
   }, [processingDocId, supabase, fetchDocuments, fetchTypes, fetchDocumentCount, selectedFilter]); 
 
+  // Load chat history from localStorage on mount
+  useEffect(() => {
+    if (!chatLocalStorageKey) return; // Only run if user is loaded
+
+    const storedHistory = localStorage.getItem(chatLocalStorageKey);
+    if (storedHistory) {
+      try {
+        const parsedHistory = JSON.parse(storedHistory);
+        // Basic validation
+        if (Array.isArray(parsedHistory) && parsedHistory.length > 0) {
+          setChatMessages(parsedHistory);
+          console.log('[Chat Persistence] Loaded history from localStorage');
+          return; // Exit if history loaded
+        } else {
+          console.warn('[Chat Persistence] Invalid history in localStorage');
+        }
+      } catch (error) {
+        console.error('[Chat Persistence] Error parsing localStorage history:', error);
+        localStorage.removeItem(chatLocalStorageKey); // Clear invalid entry
+      }
+    }
+
+    // Set initial message if no valid history was loaded
+    console.log('[Chat Persistence] Setting initial message.');
+    setChatMessages([
+      {
+        id: `asst-init-${Date.now()}`,
+        role: 'assistant',
+        content: "Hi! I'm your document assistant. How can I help you search through your documents today?",
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ]);
+  }, [chatLocalStorageKey]); // Depend on the key (which depends on user)
+
+  // Save chat history to localStorage whenever it changes
+  useEffect(() => {
+    if (!chatLocalStorageKey || chatMessages.length === 0) return;
+
+    // Avoid saving if it only contains the single initial message?
+    // Or save regardless? Let's save regardless for now.
+    // Consider adding a check like: 
+    // if (chatMessages.length === 1 && chatMessages[0].id.startsWith('asst-init-')) return;
+
+    try {
+      localStorage.setItem(chatLocalStorageKey, JSON.stringify(chatMessages));
+      // console.log('[Chat Persistence] Saved history to localStorage'); // Optional logging
+    } catch (error) {
+      console.error('[Chat Persistence] Error saving history to localStorage:', error);
+    }
+  }, [chatMessages, chatLocalStorageKey]); // Depend on messages and key
+
   // Scroll chat useEffect 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -372,6 +421,12 @@ export default function Dashboard() {
   const handleFilterChange = (newFilter: Filter) => {
     setSelectedFilter(newFilter);
     // Data fetching is handled by the useEffect watching selectedFilter
+
+    // On mobile screens (heuristic check, adjust breakpoint if needed)
+    if (window.innerWidth < 768) { 
+      setMobileView('documents'); // Switch to documents view
+    }
+    setIsMobileSidebarOpen(false); // Always close sidebar after selection
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -498,77 +553,127 @@ export default function Dashboard() {
 
   // --- Main Component Return ---
   return (
-    // Use flex row layout, full screen height, prevent body scroll
-    <div className="flex flex-row h-screen w-screen overflow-hidden bg-slate-50 dark:bg-[#0B1120]">
+    // Use flex row layout ON MEDIUM SCREENS AND UP, full screen height, prevent body scroll
+    <div className="flex flex-row h-screen w-screen overflow-hidden bg-slate-50 dark:bg-[#0B1120] relative">
+
+      {/* Overlay for mobile sidebar */} 
+      {isMobileSidebarOpen && (
+        <div 
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          onClick={() => setIsMobileSidebarOpen(false)} 
+        />
+      )}
+
       {/* === START NEW SIDEBAR === */}
       {/* Sidebar manages its own width and transition */}
-      <Sidebar> 
-         <SidebarBody className="justify-between gap-10 px-0 py-4 border-r dark:border-slate-700"> {/* Add border */} 
-            {/* ... existing sidebar content (Main links, Categories, Settings) ... */}
-              <div className="flex flex-col flex-1 overflow-y-auto px-4"> {/* Inner scrollable area */} 
-                 {/* Using Buttons for links to maintain style/click handling */} 
-                 <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Main</h3>
-                 {sidebarLinks.map((link, idx) => (
-                    <Button
-                        key={`link-${idx}`}
-                        variant={selectedFilter.type === link.filter.type && selectedFilter.value === link.filter.value ? "secondary" : "ghost"}
-                        className="w-full justify-start gap-2"
-                        onClick={() => !link.disabled && handleFilterChange(link.filter)}
-                        disabled={link.disabled}
-                    >
-                       {link.icon}
-                       {link.label}
-                    </Button>
-                 ))}
-                 <h3 className="text-xs font-semibold text-slate-500 uppercase mt-4 mb-2">Categories</h3>
-                 {isLoadingTypes ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-8 w-full" />
-                      <Skeleton className="h-8 w-full" />
-                    </div>
-                 ) : categoryLinks.length > 0 ? (
-                   categoryLinks.map((link, idx) => (
-                     <Button 
-                        key={`cat-${idx}`}
-                        variant={selectedFilter.type === link.filter.type && selectedFilter.value === link.filter.value ? "secondary" : "ghost"}
-                        className="w-full justify-start gap-2 capitalize"
-                        onClick={() => handleFilterChange(link.filter)}
+      <div className={cn(
+         "fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-[#0B1120] transition-transform duration-300 ease-in-out md:static md:flex md:flex-shrink-0 md:translate-x-0",
+         isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full" 
+      )}> 
+        <Sidebar> 
+          <SidebarBody className="justify-between gap-10 px-0 py-4 border-r dark:border-slate-700"> {/* Add border */} 
+             {/* ... existing sidebar content (Main links, Categories, Settings) ... */}
+               <div className="flex flex-col flex-1 overflow-y-auto px-4"> {/* Inner scrollable area */} 
+                  {/* Using Buttons for links to maintain style/click handling */} 
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Main</h3>
+                  {sidebarLinks.map((link, idx) => (
+                     <Button
+                         key={`link-${idx}`}
+                         variant={selectedFilter.type === link.filter.type && selectedFilter.value === link.filter.value ? "secondary" : "ghost"}
+                         className="w-full justify-start gap-2"
+                         onClick={() => !link.disabled && handleFilterChange(link.filter)}
+                         disabled={link.disabled}
                      >
-                        {link.icon} {link.label}
+                        {link.icon}
+                        {link.label}
                      </Button>
-                   ))
-                 ) : (
-                   <p className="text-xs text-slate-500">No categories found.</p>
-                 )}
-                 {/* TODO: Date Filter section could go here */} 
-              </div>
-              {/* Bottom Section (e.g., Settings) */} 
-              <div className="mt-auto flex-shrink-0 px-4 pb-4"> {/* Add padding */} 
-                 <Link href="/profile" className="flex items-center p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">
-                    <Settings className="mr-3 h-5 w-5" /> Settings
-                 </Link>
-              </div>
-           </SidebarBody>
-         </Sidebar>
+                  ))}
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase mt-4 mb-2">Categories</h3>
+                  {isLoadingTypes ? (
+                     <div className="space-y-2">
+                       <Skeleton className="h-8 w-full" />
+                       <Skeleton className="h-8 w-full" />
+                     </div>
+                  ) : categoryLinks.length > 0 ? (
+                    categoryLinks.map((link, idx) => (
+                      <Button 
+                         key={`cat-${idx}`}
+                         variant={selectedFilter.type === link.filter.type && selectedFilter.value === link.filter.value ? "secondary" : "ghost"}
+                         className="w-full justify-start gap-2 capitalize"
+                         onClick={() => handleFilterChange(link.filter)}
+                      >
+                         {link.icon} {link.label}
+                      </Button>
+                    ))
+                  ) : (
+                    <p className="text-xs text-slate-500">No categories found.</p>
+                  )}
+                  {/* TODO: Date Filter section could go here */} 
+               </div>
+               {/* Bottom Section (e.g., Settings) */} 
+               <div className="mt-auto flex-shrink-0 px-4 pb-4"> {/* Add padding */} 
+                  <Link href="/profile" className="flex items-center p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300">
+                     <Settings className="mr-3 h-5 w-5" /> Settings
+                  </Link>
+               </div>
+            </SidebarBody>
+          </Sidebar>
+      </div>
       {/* === END NEW SIDEBAR === */}
 
-      {/* Center Content Area - Takes up remaining space */} 
-      <div className="flex-1 flex flex-col overflow-hidden h-full max-h-full px-4 sm:px-6 lg:px-8 py-4 md:py-6">
+      {/* Center Content Area - Takes up remaining space */}
+      {/* Hide Center Content on small screens, show as flex-1 on medium+ */}
+      <div className={cn(
+         "flex-col overflow-hidden h-full max-h-full", // Basic structure
+         mobileView === 'documents' ? 'flex w-full' : 'hidden', // Mobile visibility
+         "md:flex md:flex-1 md:w-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6" // Desktop layout & padding
+       )}> 
+
+         {/* Header for Center Content Area - with Mobile Controls */} 
+         <div className="flex items-center border-b dark:border-slate-700 pb-2 mb-2 md:mb-4 flex-shrink-0">
+            {/* Hamburger Menu Button - Only on mobile */} 
+            <div className="md:hidden"> {/* Wrapper for mobile */} 
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsMobileSidebarOpen(true)}
+              >
+                <Menu className="h-6 w-6" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </div>
+
+            {/* Title - centered on mobile, left-aligned on desktop */} 
+            <h3 className="text-lg md:text-xl font-semibold text-slate-900 dark:text-white capitalize text-center flex-1 md:text-left">
+               {/* Dynamic title based on filter */} 
+               {selectedFilter.type === 'special' ? `Document Explorer - ${selectedFilter.value}` : `Document Explorer - ${selectedFilter.value}`}
+               {isLoadingDocuments ? "" : ` (${documents.length})`}
+            </h3>
+
+            {/* Switch to Chat Button - Only on mobile */} 
+            <div className="md:hidden"> {/* Wrapper for mobile */} 
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMobileView('chat')}
+              >
+                <MessageSquare className="h-6 w-6" />
+                <span className="sr-only">Switch to Chat</span>
+              </Button>
+            </div>
+         </div>
+
          {/* Upload Zone - Adjust top margin/padding if needed after container padding */}
-         <div className="mb-4 md:mb-6 p-4 md:p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-800 flex-shrink-0">
-           <FileUpload onUploadComplete={handleUploadSuccess} /> 
-           {uploadStatus && ( 
-            <p className={`mt-4 text-sm font-medium ${uploadStatus.startsWith('File already exists') ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
-               {uploadStatus}
-            </p>
-          )}
-        </div>
+         <div className="p-4 md:p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-800 flex-shrink-0 mb-4">
+            <FileUpload onUploadComplete={handleUploadSuccess} /> 
+            {uploadStatus && ( 
+             <p className={`mt-4 text-sm font-medium ${uploadStatus.startsWith('File already exists') ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
+                {uploadStatus}
+             </p>
+           )}
+          </div>
         
-        {/* Document Display Area - Adjust margin/padding if needed */} 
-        <h3 className="text-lg md:text-xl font-semibold mb-4 text-slate-900 dark:text-white capitalize flex-shrink-0">
-           {selectedFilter.type === 'special' ? `Document Explorer - ${selectedFilter.value}` : `Document Explorer - ${selectedFilter.value}`}
-           {isLoadingDocuments ? "" : ` (${documents.length})`}
-        </h3>
+        {/* Document Display Area */} 
         <div className="flex-grow overflow-auto border dark:border-slate-700 rounded-md h-0 min-h-0"> 
           <Table className="min-w-full">
             <TableHeader className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10">
@@ -633,13 +738,35 @@ export default function Dashboard() {
         </div> 
       </div>
 
-      {/* Right Chat Panel - Add horizontal padding matching header, remove left border if redundant */}
-      <div className="w-[400px] flex-shrink-0 bg-white dark:bg-neutral-dark border-l dark:border-slate-700 flex flex-col h-full max-h-full overflow-hidden px-4 sm:px-6 lg:px-8 py-4 md:py-6">
-         {/* Header - Remove padding if container has it */}
-         <div className="border-b dark:border-slate-700 flex items-center justify-between pb-4">
-            <h2 className="text-lg font-semibold">Document Assistant</h2>
-          </div>
-          
+      {/* Right Chat Panel - Full width on mobile, fixed width on medium+ */}
+      {/* Ensure it takes full height and handles overflow */} 
+      {/* Mobile: Show based on mobileView state. Desktop: Always show fixed width */}
+      <div className={cn(
+         "bg-white dark:bg-neutral-dark flex flex-col h-full max-h-full overflow-hidden", // Basic structure
+         mobileView === 'chat' ? 'flex w-full' : 'hidden', // Mobile visibility
+         "md:flex md:w-[400px] md:flex-shrink-0 md:border-l dark:border-slate-700 px-4 sm:px-6 lg:px-8 py-4 md:py-6" // Desktop layout & padding
+      )}>
+         {/* Chat Header */} 
+         <div className="flex items-center border-b dark:border-slate-700 pb-2 flex-shrink-0">
+            {/* Hamburger Menu Button - Only on mobile */} 
+            <div className="md:hidden"> {/* Wrapper for mobile */} 
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsMobileSidebarOpen(true)}
+              >
+                <Menu className="h-6 w-6" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </div>
+
+            {/* Center the title when menu button is present */} 
+            <h2 className="text-lg font-semibold text-center flex-1 md:text-left">Document Assistant</h2>
+            
+            {/* Placeholder div for mobile layout consistency (to balance menu button) */} 
+            <div className="md:hidden w-10"></div> {/* Adjust width to match button size if needed */} 
+         </div>
+
          {/* Chat Messages Container - Remove padding if container has it */}
          <div 
              ref={chatContainerRef}
