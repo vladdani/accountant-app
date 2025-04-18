@@ -65,7 +65,11 @@ export function WhyCariNota() {
             </p>
           </div>
         </div>
-        <FeaturesSectionWithHoverEffects features={whyCariNota} />
+        <FeaturesSectionWithHoverEffects 
+          title="Why CariNota?" 
+          description="Stop drowning in paperwork. CariNota simplifies document management so you can focus on growing your business."
+          features={whyCariNota} 
+        />
       </div>
     </section>
   );
