@@ -234,7 +234,7 @@ export default function Dashboard() {
 
   // Function to fetch document count
   const fetchDocumentCount = useCallback(async () => {
-    if (!user?.id || !supabase) return;
+    if (!user?.id) return;
     console.log('[fetchDocumentCount] Starting fetch...');
     setIsLoadingCount(true);
     try {
@@ -253,7 +253,7 @@ export default function Dashboard() {
     } finally {
       setIsLoadingCount(false);
     }
-  }, [user?.id, supabase]);
+  }, [user?.id]);
 
   // --- Data Fetching useEffects ---
 
@@ -280,7 +280,7 @@ export default function Dashboard() {
       fetchDocuments(); // Call without argument
     }
     // Add fetchDocumentCount to dependencies
-  }, [user?.id, supabase, fetchDocuments, fetchTypes, fetchDocumentCount, selectedFilter]);
+  }, [user?.id, fetchDocuments, fetchTypes, fetchDocumentCount, selectedFilter]);
 
   // Realtime listener for document changes
   useEffect(() => {
@@ -327,7 +327,7 @@ export default function Dashboard() {
       }
     };
     // Ensure dependencies are correct for this single listener
-  }, [processingDocId, supabase, fetchDocuments, fetchTypes, fetchDocumentCount, selectedFilter]); 
+  }, [processingDocId, fetchDocuments, fetchTypes, fetchDocumentCount, selectedFilter]); 
 
   // Load chat history from localStorage on mount
   useEffect(() => {

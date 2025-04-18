@@ -40,22 +40,22 @@ const workflowSteps = [
   {
     title: "Step One",
     description: "First step of your workflow",
-    preview: <TypewriterEffect words={[{ text: "Processing step one..." }]} />
+    preview: <TypewriterEffect text={"Processing step one..."} />
   },
   {
     title: "Step Two",
     description: "Second step of your workflow",
-    preview: <TypewriterEffect words={[{ text: "Executing step two..." }]} />
+    preview: <TypewriterEffect text={"Executing step two..."} />
   },
   {
     title: "Step Three",
     description: "Third step of your workflow",
-    preview: <TypewriterEffect words={[{ text: "Running step three..." }]} />
+    preview: <TypewriterEffect text={"Running step three..."} />
   },
   {
     title: "Step Four",
     description: "Fourth step of your workflow",
-    preview: <TypewriterEffect words={[{ text: "Completing step four..." }]} />
+    preview: <TypewriterEffect text={"Completing step four..."} />
   }
 ];
 
