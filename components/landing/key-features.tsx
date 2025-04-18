@@ -53,14 +53,12 @@ const whyCariNota = [
 
 export function WhyCariNota() {
   return (
-    <section id="features" className="w-full py-12 md:py-24 lg:py-32 bg-muted/40">
-      <div className="container mx-auto px-4 md:px-6">
-        <FeaturesSectionWithHoverEffects 
-          title="Why CariNota?" 
-          description="Stop drowning in paperwork. CariNota simplifies document management so you can focus on growing your business."
-          features={whyCariNota} 
-        />
-      </div>
+    <section id="features" className="w-full py-12 md:py-24 lg:py-32 bg-background">
+      <FeaturesSectionWithHoverEffects 
+        title="Why CariNota?" 
+        description="Stop drowning in paperwork. CariNota simplifies document management so you can focus on growing your business."
+        features={whyCariNota} 
+      />
     </section>
   );
 } 
