@@ -1,107 +1,97 @@
 "use client"
 
-import * as React from "react"
-import { Button } from "@/components/ui/button"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
-import { Facebook, Instagram, Linkedin, Twitter } from "lucide-react"
+import Link from "next/link"
+import { Files } from "lucide-react"
 
-function Footerdemo() {
-  const currentYear = new Date().getFullYear();
-
+export function Footerdemo() {
   return (
-    <footer className="relative border-t bg-background text-foreground transition-colors duration-300">
-      <div className="container mx-auto px-4 py-12 md:px-6 lg:px-8">
-        <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-2">
-          <div>
-            <h3 className="mb-4 text-lg font-semibold">Contact Us</h3>
-            <address className="space-y-2 text-sm not-italic">
-              <p>Jalan Sunset Road No 225X,</p>
-              <p>Blok 6-7 Badung, Kuta, 80361</p>
-              <p>Email: mail@vladdanilov.com</p>
-            </address>
-          </div>
-          <div className="relative">
-            <h3 className="mb-4 text-lg font-semibold">Follow Us</h3>
-            <div className="mb-6 flex space-x-4">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" className="rounded-full">
-                      <Facebook className="h-4 w-4" />
-                      <span className="sr-only">Facebook</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Follow us on Facebook</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" className="rounded-full">
-                      <Twitter className="h-4 w-4" />
-                      <span className="sr-only">Twitter</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Follow us on Twitter</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" className="rounded-full">
-                      <Instagram className="h-4 w-4" />
-                      <span className="sr-only">Instagram</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Follow us on Instagram</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" className="rounded-full">
-                      <Linkedin className="h-4 w-4" />
-                      <span className="sr-only">LinkedIn</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Connect with us on LinkedIn</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+    <footer className="w-full py-8 border-t bg-background">
+      <div className="container px-4 md:px-6 mx-auto max-w-6xl">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <Files className="h-6 w-6 text-primary" />
+              <span className="text-xl font-bold">CariNota</span>
             </div>
+            <p className="text-sm text-muted-foreground">
+              Smart document management for Indonesian accountants and businesses.
+            </p>
+          </div>
+          <div className="space-y-4">
+            <h3 className="font-medium">Product</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/#features" className="text-sm text-muted-foreground hover:text-foreground">
+                  Features
+                </Link>
+              </li>
+              <li>
+                <Link href="/#pricing" className="text-sm text-muted-foreground hover:text-foreground">
+                  Pricing
+                </Link>
+              </li>
+              <li>
+                <Link href="/#testimonials" className="text-sm text-muted-foreground hover:text-foreground">
+                  Testimonials
+                </Link>
+              </li>
+              <li>
+                <Link href="/#faq" className="text-sm text-muted-foreground hover:text-foreground">
+                  FAQ
+                </Link>
+              </li>
+            </ul>
+          </div>
+          <div className="space-y-4">
+            <h3 className="font-medium">Resources</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/docs" className="text-sm text-muted-foreground hover:text-foreground">
+                  Documentation
+                </Link>
+              </li>
+              <li>
+                <Link href="/blog" className="text-sm text-muted-foreground hover:text-foreground">
+                  Blog
+                </Link>
+              </li>
+              <li>
+                <Link href="/support" className="text-sm text-muted-foreground hover:text-foreground">
+                  Support
+                </Link>
+              </li>
+            </ul>
+          </div>
+          <div className="space-y-4">
+            <h3 className="font-medium">Company</h3>
+            <ul className="space-y-2">
+              <li>
+                <Link href="/about" className="text-sm text-muted-foreground hover:text-foreground">
+                  About
+                </Link>
+              </li>
+              <li>
+                <Link href="/contact" className="text-sm text-muted-foreground hover:text-foreground">
+                  Contact
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy" className="text-sm text-muted-foreground hover:text-foreground">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link href="/terms" className="text-sm text-muted-foreground hover:text-foreground">
+                  Terms of Service
+                </Link>
+              </li>
+            </ul>
           </div>
         </div>
-        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t pt-8 text-center md:flex-row">
-          <p className="text-sm text-muted-foreground">
-            © {currentYear} PT Satu Sampai Seratus. All rights reserved.
-          </p>
-          <nav className="flex gap-4 text-sm">
-            <a href="#" className="transition-colors hover:text-primary">
-              Privacy Policy
-            </a>
-            <a href="#" className="transition-colors hover:text-primary">
-              Terms of Service
-            </a>
-            <a href="#" className="transition-colors hover:text-primary">
-              Cookie Settings
-            </a>
-          </nav>
+        <div className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
+          <p>© {new Date().getFullYear()} PT Satu Sampai Seratus. All rights reserved.</p>
         </div>
       </div>
     </footer>
   )
 }
-
-export { Footerdemo }

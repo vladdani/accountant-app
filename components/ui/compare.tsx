@@ -1,9 +1,11 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-unused-vars, @next/next/no-img-element */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { SparklesCore } from "@/components/ui/sparkles";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { IconDotsVertical } from "@tabler/icons-react";
+import Image from "next/image";
 
 interface CompareProps {
   firstImage?: string;
@@ -33,6 +35,8 @@ export const Compare = ({
   const [isDragging, setIsDragging] = useState(false);
 
   const sliderRef = useRef<HTMLDivElement>(null);
+
+  const [isMouseOver, setIsMouseOver] = useState(false);
 
   const autoplayRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -66,10 +70,12 @@ export const Compare = ({
   }, [startAutoplay, stopAutoplay]);
 
   function mouseEnterHandler() {
+    setIsMouseOver(true);
     stopAutoplay();
   }
 
   function mouseLeaveHandler() {
+    setIsMouseOver(false);
     if (slideMode === "hover") {
       setSliderXPercent(initialSliderPercentage);
     }
@@ -80,7 +86,7 @@ export const Compare = ({
   }
 
   const handleStart = useCallback(
-    () => {
+    (clientX: number) => {
       if (slideMode === "drag") {
         setIsDragging(true);
       }
@@ -110,7 +116,7 @@ export const Compare = ({
   );
 
   const handleMouseDown = useCallback(
-    () => handleStart(),
+    (e: React.MouseEvent) => handleStart(e.clientX),
     [handleStart]
   );
   const handleMouseUp = useCallback(() => handleEnd(), [handleEnd]);
@@ -120,9 +126,9 @@ export const Compare = ({
   );
 
   const handleTouchStart = useCallback(
-    () => {
+    (e: React.TouchEvent) => {
       if (!autoplay) {
-        handleStart();
+        handleStart(e.touches[0].clientX);
       }
     },
     [handleStart, autoplay]
@@ -146,7 +152,7 @@ export const Compare = ({
   return (
     <div
       ref={sliderRef}
-      className={cn("w-[400px] h-[400px] overflow-hidden", className)}
+      className={cn("w-[400px] h-[400px] overflow-hidden relative rounded-2xl", className)}
       style={{
         position: "relative",
         cursor: slideMode === "drag" ? "grab" : "col-resize",
@@ -183,7 +189,7 @@ export const Compare = ({
             />
           </div>
           {showHandlebar && (
-            <div className="h-5 w-5 rounded-md top-1/2 -translate-y-1/2 bg-white z-30 -right-2.5 absolute   flex items-center justify-center shadow-[0px_-1px_0px_0px_#FFFFFF40]">
+            <div className="h-5 w-5 rounded-md top-1/2 -translate-y-1/2 bg-white z-30 -right-2.5 absolute flex items-center justify-center shadow-[0px_-1px_0px_0px_#FFFFFF40]">
               <IconDotsVertical className="h-4 w-4 text-black" />
             </div>
           )}
@@ -203,12 +209,15 @@ export const Compare = ({
               transition={{ duration: 0 }}
             >
               <img
-                alt="first image"
+                alt="Before CariNota"
                 src={firstImage}
                 className={cn(
-                  "absolute inset-0  z-20 rounded-2xl flex-shrink-0 w-full h-full select-none",
+                  "absolute inset-0 z-20 rounded-2xl flex-shrink-0 w-full h-full object-cover object-center select-none",
                   firstImageClassName
                 )}
+                width={800}
+                height={600}
+                loading="eager"
                 draggable={false}
               />
             </motion.div>
@@ -220,11 +229,14 @@ export const Compare = ({
         {secondImage ? (
           <motion.img
             className={cn(
-              "absolute top-0 left-0 z-[19]  rounded-2xl w-full h-full select-none",
+              "absolute top-0 left-0 z-[19] rounded-2xl w-full h-full object-cover object-center select-none",
               secondImageClassname
             )}
-            alt="second image"
+            alt="With CariNota"
             src={secondImage}
+            width={800}
+            height={600}
+            loading="eager"
             draggable={false}
           />
         ) : null}

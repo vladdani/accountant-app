@@ -29,9 +29,9 @@ import { Pricing } from "@/components/blocks/pricing";
 import Testimonials from "@/components/landing/testimonials";
 import { Faq } from "@/components/landing/faq";
 import { Footerdemo } from "@/components/ui/footer-section";
-import { Compare } from "@/components/ui/compare";
 import { Suspense } from "react";
 import PostHogPageView from "@/components/PostHogPageView";
+import { Compare } from "@/components/landing/compare";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
@@ -40,22 +40,22 @@ const workflowSteps = [
   {
     title: "Step One",
     description: "First step of your workflow",
-    preview: <TypewriterEffect text="Processing step one..." />
+    preview: <TypewriterEffect words={[{ text: "Processing step one..." }]} />
   },
   {
     title: "Step Two",
     description: "Second step of your workflow",
-    preview: <TypewriterEffect text="Executing step two..." />
+    preview: <TypewriterEffect words={[{ text: "Executing step two..." }]} />
   },
   {
     title: "Step Three",
     description: "Third step of your workflow",
-    preview: <TypewriterEffect text="Running step three..." />
+    preview: <TypewriterEffect words={[{ text: "Running step three..." }]} />
   },
   {
     title: "Step Four",
     description: "Fourth step of your workflow",
-    preview: <TypewriterEffect text="Completing step four..." />
+    preview: <TypewriterEffect words={[{ text: "Completing step four..." }]} />
   }
 ];
 
@@ -258,36 +258,7 @@ export default function LandingPage() {
       <main className="flex-1">
         <Hero />
         <WhyCariNota />
-
-        {/* Comparison Section */}
-        <section className="w-full py-12 md:py-24 lg:py-32 bg-background"> {/* Match styling of other sections */} 
-          <div className="container mx-auto px-4 md:px-6">
-            {/* Section Header */} 
-            <div className="flex flex-col items-center justify-center space-y-4 text-center mb-12">
-              <div className="space-y-2">
-                <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-foreground">
-                  Search Time Reduction by 90%
-                </h2>
-                <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-                  Most users reduce time spent searching files from 3–5 hours/week to less than 30 minutes.
-                </p>
-              </div>
-            </div>
-
-            {/* Comparison Component */} 
-            <div className="flex justify-center"> {/* Center the component */} 
-              <Compare
-                // !! IMPORTANT: Replace these with your actual image paths !!
-                firstImage="/images/placeholder-messy-shelf.jpg" // Placeholder for messy shelf
-                secondImage="/images/placeholder-organized-data.jpeg" // Updated extension
-                // You can adjust other props like className, slideMode etc. if needed
-                // Example: className="w-full max-w-3xl h-auto aspect-video rounded-lg shadow-xl"
-                className="w-full max-w-3xl h-[400px] rounded-lg shadow-xl border" // Example styling with fixed height
-              />
-            </div>
-          </div>
-        </section>
-
+        <Compare />
         <div className="flex justify-center w-full">
           <Pricing plans={pricingPlans} />
         </div>

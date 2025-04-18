@@ -13,12 +13,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { LogOut, Files } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { usePathname } from 'next/navigation';
 
 // TopBar component handles user profile display and navigation
 export default function TopBar() {
   const { user, signOut } = useAuth();
-  const pathname = usePathname();
 
   // Add a debug log to check user status
   console.log("TopBar render - User state:", !!user, user?.email);
@@ -33,8 +31,8 @@ export default function TopBar() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between w-full max-w-full">
         <div className="flex items-center">
           <Link href="/" className="flex items-center space-x-2">
-            <Files className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">CariNota</span>
+            <Files className="h-7 w-7 text-primary" />
+            <span className="text-2xl font-bold">CariNota</span>
           </Link>
           <nav className="hidden md:flex items-center ml-10 space-x-4">
             {/* Add other nav links if needed */}
@@ -46,7 +44,7 @@ export default function TopBar() {
           {user ? (
             <>
               {/* Always show Dashboard button when user is logged in */}
-              <Button variant="ghost" asChild className="mr-2">
+              <Button asChild>
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
               
@@ -77,17 +75,10 @@ export default function TopBar() {
             </>
           ) : (
             <>
-              {pathname !== '/login' && (
-                <Button variant="ghost" asChild>
-                  <Link href="/login">Login</Link>
-                </Button>
-              )}
-              {/* Add Get Started button for landing page */}
-              {pathname === '/' && (
-                <Button asChild>
-                  <Link href="/login">Get Started</Link>
-                </Button>
-              )}
+              {/* Simplify to a single CTA button for non-logged in users */}
+              <Button asChild>
+                <Link href="/login">Try CariNota For Free</Link>
+              </Button>
             </>
           )}
         </div>

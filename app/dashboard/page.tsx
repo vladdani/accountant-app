@@ -705,7 +705,7 @@ export default function Dashboard() {
 
                    return (
                     <TableRow key={doc.id}>
-                      <TableCell className="font-medium truncate" title={docName}>{docName}</TableCell>
+                      <TableCell className="font-medium truncate max-w-0" title={docName}>{docName}</TableCell>
                       <TableCell>
                         <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-xs capitalize">
                           {docType}

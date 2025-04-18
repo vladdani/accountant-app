@@ -48,89 +48,91 @@ const testimonials = [
   {
     quote:
       "Finally, a simple way to store all our business documents! Uploading is drag-and-drop easy, and finding anything later is surprisingly fast with CariNota.",
-    name: "Agus Hermawan",
-    title: "Small Business Owner, Jakarta",
-    initials: "AH",
-    rating: 5,
-  },
-  {
-    quote:
-      "Preparing for audits used to be a nightmare of searching through folders. With CariNota, uploading is simple, and finding specific invoices takes just a few clicks.",
-    name: "Siti Aminah",
-    title: "Internal Auditor, Jakarta",
-    initials: "SA",
-    rating: 5,
-  },
-  {
-    quote:
-      "CariNota simplified our document workflow immensely. Uploading project files is quick, storage is reliable, and searching for past documents is incredibly efficient.",
-    name: "Eko Prasetyo",
-    title: "Project Manager, Ubud, Bali",
-    initials: "EP",
+    name: "Ahmad Putra",
+    title: "Operations Director, Bandung",
+    initials: "AP",
     rating: 5,
   },
 ];
 
 export default function Testimonials() {
-  // Initialize the Autoplay plugin
   const plugin = React.useRef(
-    Autoplay({ delay: 4000, stopOnInteraction: true, stopOnMouseEnter: true })
+    Autoplay({ 
+      delay: 4000, 
+      stopOnInteraction: false, 
+      rootNode: (emblaRoot) => emblaRoot.parentElement 
+    })
   );
 
   return (
-    <section id="testimonials" className="w-full py-12 md:py-24 lg:py-32 bg-background">
-      <div className="container mx-auto px-4 md:px-6">
-        <div className="flex flex-col items-center justify-center space-y-4 text-center mb-12">
+    <section id="testimonials" className="w-full py-12 md:py-24 bg-muted/50">
+      <div className="container px-4 md:px-6 mx-auto max-w-6xl">
+        <div className="flex flex-col items-center justify-center space-y-4 text-center">
           <div className="space-y-2">
-            <h2 className="text-3xl font-bold tracking-tighter sm:text-5xl text-foreground">
-              What Our Users Say
+            <h2 className="text-3xl font-bold tracking-tighter sm:text-4xl md:text-5xl">
+              Our Clients Love CariNota
             </h2>
-            <p className="max-w-[900px] text-muted-foreground md:text-xl/relaxed lg:text-base/relaxed xl:text-xl/relaxed">
-              Trusted by accounting professionals across Indonesia
+            <p className="mx-auto max-w-[700px] text-muted-foreground md:text-lg">
+              See what businesses across Indonesia are saying about their experience with CariNota
             </p>
           </div>
         </div>
-
-        {/* Carousel implementation */} 
         <Carousel
-          plugins={[plugin.current]} // Add the autoplay plugin
-          className="w-full max-w-xs sm:max-w-2xl lg:max-w-4xl mx-auto" // Adjust max width as needed
-          // onMouseEnter={plugin.current.stop} // Stop on hover (already handled by plugin option)
-          // onMouseLeave={plugin.current.reset} // Reset on leave (already handled by plugin option)
-          opts={{
-            align: "start",
-            loop: true,
-          }}
+          plugins={[plugin.current]}
+          className="mx-auto max-w-5xl mt-8"
+          onMouseEnter={plugin.current.stop}
+          onMouseLeave={plugin.current.reset}
         >
           <CarouselContent>
-            {testimonials.map((testimonial) => (
-              <CarouselItem key={testimonial.name} className="md:basis-1/2 lg:basis-1/3 pl-4"> {/* Adjust basis for number of visible items */} 
-                <div className="p-1 h-full"> {/* Add padding for spacing between items */} 
-                  <Card className="bg-muted/40 shadow-sm hover:shadow-md transition-shadow duration-300 flex flex-col h-full"> {/* Ensure card takes full height */} 
-                    <CardHeader className="flex flex-row items-center gap-4 pb-4">
+            {testimonials.map((testimonial, index) => (
+              <CarouselItem key={index} className="md:basis-1/2 lg:basis-1/3 p-2">
+                <Card className="h-full">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center space-x-2">
                       <Avatar>
-                        <AvatarImage src="/placeholder-user.jpg" alt={testimonial.name} />
-                        <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-                          {testimonial.initials}
-                        </AvatarFallback>
+                        <AvatarFallback>{testimonial.initials}</AvatarFallback>
+                        <AvatarImage src="" alt={testimonial.name} />
                       </Avatar>
                       <div>
-                        <p className="font-semibold text-foreground">{testimonial.name}</p>
-                        <p className="text-muted-foreground">{testimonial.title}</p>
+                        <h4 className="text-sm font-semibold">
+                          {testimonial.name}
+                        </h4>
+                        <p className="text-xs text-muted-foreground">
+                          {testimonial.title}
+                        </p>
                       </div>
-                    </CardHeader>
-                    <CardContent className="flex-grow">
-                      <p className="text-muted-foreground italic before:content-[open-quote] after:content-[close-quote]">
-                        {testimonial.quote.replace(/^"|"$/g, '')}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      &ldquo;{testimonial.quote}&rdquo;
+                    </p>
+                    <div className="flex space-x-1 mt-3">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <svg
+                          key={i}
+                          className={`w-4 h-4 ${
+                            i < testimonial.rating
+                              ? "text-primary"
+                              : "text-muted"
+                          }`}
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               </CarouselItem>
             ))}
           </CarouselContent>
-          <CarouselPrevious className="hidden sm:flex" /> {/* Hide controls on smallest screens? */} 
-          <CarouselNext className="hidden sm:flex" />
+          <div className="flex justify-center mt-4 space-x-2">
+            <CarouselPrevious className="relative left-0 translate-x-0 bg-background" />
+            <CarouselNext className="relative right-0 translate-x-0 bg-background" />
+          </div>
         </Carousel>
       </div>
     </section>
