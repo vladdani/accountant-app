@@ -32,6 +32,7 @@ import { Footerdemo } from "@/components/ui/footer-section";
 import { Suspense } from "react";
 import PostHogPageView from "@/components/PostHogPageView";
 import { Compare } from "@/components/landing/compare";
+import { TimeSavedEstimator } from "@/components/landing/time-saved-estimator";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
@@ -257,6 +258,7 @@ export default function LandingPage() {
       <PostHogPageView />
       <main className="flex-1">
         <Hero />
+        <TimeSavedEstimator />
         <WhyCariNota />
         <Compare />
         <div className="flex justify-center w-full">
