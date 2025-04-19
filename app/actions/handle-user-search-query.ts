@@ -3,7 +3,7 @@
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { CoreMessage, generateText, tool } from 'ai';
 import { z } from 'zod';
-import { queryStructuredDocumentsAction, queryParamsSchema } from '@/app/actions/query-structured-documents';
+import { queryStructuredDocumentsAction } from '@/app/actions/query-structured-documents';
 import { createClient } from '@/utils/supabase/server';
 
 // --- Types ---
@@ -124,7 +124,7 @@ If the tool returns an error or no documents found, inform the user clearly.
             const parsedArgs = searchDocumentsTool.parameters.parse(toolCall.args);
             
             // Prepare parameters for the backend action, mapping filter_ names
-            const backendParams: z.infer<typeof queryParamsSchema> = {
+            const backendParams = {
                 search_terms: parsedArgs.search_terms,
                 vendor: parsedArgs.filter_vendor,
                 document_type: parsedArgs.filter_type,
