@@ -998,6 +998,11 @@ export default function Dashboard() {
             </div>
          </div>
 
+         {/* Natural Language Search */}
+         <div className="mb-4 flex-shrink-0">
+           <AiSearch />
+         </div>
+
          {/* Upload Zone - Only show for new users with no documents */}
          {!hasDocuments && (
            <div className="p-4 md:p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-800 flex-shrink-0 mb-4">
@@ -1520,10 +1525,6 @@ export default function Dashboard() {
           )}
         </DialogContent>
       </Dialog>
-
-      <div className="grid grid-cols-1 gap-4">
-        <AiSearch />
-      </div>
     </div> // End Main Flex Container
   );
 }
