@@ -30,6 +30,7 @@ import {
   ExternalLink,
   Download,
   X,
+  Trash2,
 } from 'lucide-react';
 // import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 // import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // No longer used
@@ -82,6 +83,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+
+// Import new components
+import { AiSearch } from '@/app/components/AiSearch';
 
 // --- Types ---
 interface Document {
@@ -718,6 +722,25 @@ export default function Dashboard() {
     }
   };
 
+  // --- ADD Clear Chat Handler ---
+  const handleClearChat = () => {
+    console.log("Clearing chat...");
+    // Reset to initial message or empty array
+    const initialMessage: ChatMessage = {
+      id: `asst-init-${Date.now()}`,
+      role: 'assistant',
+      content: "Hi! I'm your document assistant. How can I help you search through your documents today?",
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setChatMessages([initialMessage]);
+    // Clear localStorage
+    if (chatLocalStorageKey) {
+      localStorage.removeItem(chatLocalStorageKey);
+      console.log("Cleared localStorage chat history.");
+    }
+  };
+  // -----------------------------
+
   // Recursive component for rendering the file tree
   const FileTreeNode = ({ node, level = 0 }: { node: FileNode; level?: number }) => {
     const isCurrentPath = selectedFilter.type === 'path' && selectedFilter.value === node.path;
@@ -1286,7 +1309,7 @@ export default function Dashboard() {
          "md:flex md:w-[400px] md:flex-shrink-0 md:border-l dark:border-slate-700 px-4 sm:px-6 lg:px-8 py-4 md:py-6" // Desktop layout & padding
       )}>
          {/* Chat Header */} 
-         <div className="flex items-center border-b dark:border-slate-700 pb-2 flex-shrink-0">
+         <div className="flex items-center justify-between border-b dark:border-slate-700 pb-2 flex-shrink-0">
             {/* Hamburger Menu Button - Only on mobile */} 
             <div className="md:hidden"> {/* Wrapper for mobile */} 
               <Button
@@ -1299,14 +1322,25 @@ export default function Dashboard() {
               </Button>
             </div>
 
-            {/* Center the title when menu button is present */} 
-            <h2 className="text-lg font-semibold text-center flex-1 md:text-left">Document Assistant</h2>
+            {/* Title */}
+            <h2 className="text-lg font-semibold text-center md:text-left">Document Assistant</h2>
             
-            {/* Placeholder div for mobile layout consistency (to balance menu button) */} 
-            <div className="md:hidden w-10"></div> {/* Adjust width to match button size if needed */} 
+            {/* Clear Chat Button */} 
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleClearChat}
+              title="Clear chat history"
+            >
+              <Trash2 className="h-5 w-5" />
+              <span className="sr-only">Clear Chat</span>
+            </Button>
+
+            {/* Placeholder for mobile layout (if needed) */} 
+             {/* <div className="md:hidden w-10"></div> */}
          </div>
 
-         {/* Chat Messages Container - Remove padding if container has it */}
+         {/* Chat Messages Container */} 
          <div 
              ref={chatContainerRef}
              className="flex-grow overflow-y-auto space-y-4 h-0 min-h-0 pt-4"
@@ -1327,7 +1361,38 @@ export default function Dashboard() {
                    <div 
                      className={`max-w-[85%] px-4 py-2 rounded-lg ${message.role === 'user'? 'bg-blue-500 text-white': 'bg-slate-200 dark:bg-slate-700 dark:text-white'}`}>
                      <div className="prose dark:prose-invert max-w-none">
-                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                       <ReactMarkdown 
+                         remarkPlugins={[remarkGfm]}
+                         components={{
+                           a: ({ children, href, title }) => { 
+                             if (href?.startsWith('preview:')) {
+                               const documentId = href.substring(8); // Length of "preview:"
+                               const doc = documents.find(d => d.id === documentId);
+                               if (doc) {
+                                 return (
+                                   <Button
+                                     variant="link"
+                                     className="inline p-0 h-auto font-medium text-current hover:text-current"
+                                     title={title}
+                                     onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                                        e.preventDefault(); 
+                                        handlePreview(doc);
+                                     }}
+                                   >
+                                     {children}
+                                   </Button>
+                                 );
+                               } else {
+                                 // Fallback if doc not found
+                                 return <span title={title}>{children} (Preview unavailable)</span>;
+                               }
+                             } else {
+                               // Default link rendering
+                               return <a href={href} target="_blank" rel="noopener noreferrer" title={title}>{children}</a>;
+                             }
+                           },
+                         }}
+                       >
                          {typeof message.content === 'string' ? message.content : String(message.content)}
                        </ReactMarkdown>
                      </div>
@@ -1455,6 +1520,10 @@ export default function Dashboard() {
           )}
         </DialogContent>
       </Dialog>
+
+      <div className="grid grid-cols-1 gap-4">
+        <AiSearch />
+      </div>
     </div> // End Main Flex Container
   );
 }
