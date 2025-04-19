@@ -31,7 +31,7 @@ A production-ready Next.js template featuring authentication, dark mode support,
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - npm or yarn
 - A Supabase account
 - A Stripe account
@@ -54,15 +54,19 @@ git push -u origin main
 ```
 
 2. Install dependencies:
+
 ```bash
 npm install
 ```
+
 or
+
 ```bash
 yarn install
 ```
 
 3. Create .env.local with all variables from .env.example
+
 ```
 NEXT_PUBLIC_APP_URL=http://localhost:8000
 NEXT_PUBLIC_API_URL=http://localhost:8080
@@ -91,6 +95,7 @@ NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
 ```
 
 4. Set up Google Cloud Platform (GCP):
+
    - Create new OAuth 2.0 credentials in GCP Console
    - Configure authorized JavaScript origins
    - Configure redirect URIs
@@ -99,64 +104,73 @@ NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
 5. Configure Supabase:
 
    a. Get API Keys (Project Settings > API):
-      - Project URL → NEXT_PUBLIC_SUPABASE_URL
-      - Anon Public Key → NEXT_PUBLIC_SUPABASE_ANON_KEY
-      - Service Role Secret → SUPABASE_SERVICE_ROLE_KEY
-   
+
+   - Project URL → NEXT_PUBLIC_SUPABASE_URL
+   - Anon Public Key → NEXT_PUBLIC_SUPABASE_ANON_KEY
+   - Service Role Secret → SUPABASE_SERVICE_ROLE_KEY
+
    b. Set up Authentication:
-      - Go to Authentication > Providers > Google
-      - Add your GCP Client ID and Client Secret
-      - Update Site URL and Redirect URLs
-   
+
+   - Go to Authentication > Providers > Google
+   - Add your GCP Client ID and Client Secret
+   - Update Site URL and Redirect URLs
+
    c. Database Setup:
-      - Enable Row Level Security (RLS) for all tables
-      - Create policies for authenticated users and service roles
-      - Create the following trigger function:
 
-      ```sql
-      CREATE OR REPLACE FUNCTION public.handle_new_user()
-      RETURNS trigger AS $$
-      BEGIN
-        INSERT INTO public.users (id, email, created_at, updated_at, is_deleted)
-        VALUES (NEW.id, NEW.email, NOW(), NOW(), FALSE);
-        
-        INSERT INTO public.user_preferences (user_id, has_completed_onboarding)
-        VALUES (NEW.id, FALSE);
-        
-        INSERT INTO public.user_trials (user_id, trial_start_time, trial_end_time)
-        VALUES (NEW.id, NOW(), NOW() + INTERVAL '48 hours');
-        
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql SECURITY DEFINER;
+   - Enable Row Level Security (RLS) for all tables
+   - Create policies for authenticated users and service roles
+   - Create the following trigger function:
 
-      CREATE TRIGGER on_auth_user_created
-        AFTER INSERT ON auth.users
-        FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-      ```
+   ```sql
+   CREATE OR REPLACE FUNCTION public.handle_new_user()
+   RETURNS trigger AS $$
+   BEGIN
+     INSERT INTO public.users (id, email, created_at, updated_at, is_deleted)
+     VALUES (NEW.id, NEW.email, NOW(), NOW(), FALSE);
+
+     INSERT INTO public.user_preferences (user_id, has_completed_onboarding)
+     VALUES (NEW.id, FALSE);
+
+     INSERT INTO public.user_trials (user_id, trial_start_time, trial_end_time)
+     VALUES (NEW.id, NOW(), NOW() + INTERVAL '48 hours');
+
+     RETURN NEW;
+   END;
+   $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+   CREATE TRIGGER on_auth_user_created
+     AFTER INSERT ON auth.users
+     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+   ```
 
 6. Set up Stripe:
-   
-   a. Create a live account and configure:
-      - Create product in Product Catalog
-      - Create promotional coupon codes
-      - Set up Payment Link with trial period
-   
-   b. Get required keys:
-      - Publishable Key → NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-      - Secret Key → STRIPE_SECRET_KEY
-      - Buy Button ID → NEXT_PUBLIC_STRIPE_BUTTON_ID
-   
-   c. Configure webhooks:
-      - Add endpoint: your_url/api/stripe/webhook
-      - Subscribe to events: customer.subscription.*, checkout.session.*, invoice.*, payment_intent.*
-      - Copy Signing Secret → STRIPE_WEBHOOK_SECRET
 
-8. Start the development server:
+   a. Create a live account and configure:
+
+   - Create product in Product Catalog
+   - Create promotional coupon codes
+   - Set up Payment Link with trial period
+
+   b. Get required keys:
+
+   - Publishable Key → NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+   - Secret Key → STRIPE_SECRET_KEY
+   - Buy Button ID → NEXT_PUBLIC_STRIPE_BUTTON_ID
+
+   c. Configure webhooks:
+
+   - Add endpoint: your_url/api/stripe/webhook
+   - Subscribe to events: customer.subscription._, checkout.session._, invoice._, payment_intent._
+   - Copy Signing Secret → STRIPE_WEBHOOK_SECRET
+
+7. Start the development server:
+
 ```bash
 npm run dev
 ```
+
 or
+
 ```bash
 yarn dev
 ```
@@ -203,6 +217,7 @@ yarn dev
 ### Tailwind Configuration
 
 The template includes a custom Tailwind configuration with:
+
 - Custom colors
 - Dark mode support
 - Extended theme options
@@ -211,6 +226,7 @@ The template includes a custom Tailwind configuration with:
 ### Authentication
 
 Authentication is handled through Supabase with support for:
+
 - Email/Password
 - Google OAuth
 - Magic Links
@@ -219,6 +235,7 @@ Authentication is handled through Supabase with support for:
 ### Payment Integration
 
 Stripe integration includes:
+
 - Subscription management
 - Trial periods
 - Webhook handling
@@ -252,7 +269,7 @@ YouTube - [@SeanTechStories](https://www.youtube.com/@SeanTechStories)
 
 Discord - [@Sean's Stories](https://discord.gg/TKKPzZheua)
 
-Instagram - [@SeanTechStories](https://www.instagram.com/sean_tech_stories )
+Instagram - [@SeanTechStories](https://www.instagram.com/sean_tech_stories)
 
 Project Link: [https://github.com/ShenSeanChen/launch-stripe-nextjs-supabase](https://github.com/ShenSeanChen/launch-stripe-nextjs-supabase)
 
@@ -265,3 +282,16 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 ---
 
 Made with 🔥 by [ShenSeanChen](https://github.com/ShenSeanChen)
+
+## AI Models Used
+
+The application utilizes Google Generative AI models for specific tasks:
+
+- **Document Data Extraction:** `gemini-2.0-flash`
+
+  - Used in: `app/actions/upload-file.ts`
+  - Purpose: Extracts structured data (vendor, date, amount, etc.) from uploaded document files (images/PDFs).
+
+- **Semantic Search Embeddings:** `embedding-001`
+  - Used in: `app/actions/handle-user-search-query.ts`
+  - Purpose: Generates text embeddings to enable semantic understanding and searching of document content and metadata.

@@ -56,7 +56,7 @@ if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey || !googleApiKey
 // ---+++ Initialize OFFICIAL Google AI Client +++---
 const genAI = new GoogleGenerativeAI(googleApiKey);
 const extractionModel = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash-latest", 
+    model: "gemini-2.0-flash", 
     // Optional: Safety settings are commented out, so imports were removed
     // safetySettings: [ { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE } ] 
 });
