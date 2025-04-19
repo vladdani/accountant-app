@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useState } from 'react';
-import { useDropzone, FileRejection, Accept } from 'react-dropzone';
+import { useDropzone, FileRejection, Accept, ErrorCode } from 'react-dropzone';
 import { UploadCloud, X, File as FileIcon } from 'lucide-react';
 import { uploadFile } from '@/app/actions/upload-file'; // Import the server action
 import { cn } from '@/lib/utils';
@@ -18,6 +18,10 @@ const acceptedFileTypes: Accept = {
   'image/heic': ['.heic'],
   'image/heif': ['.heif'], // Often associated with HEIC
 };
+
+const ACCEPTED_FORMATS_STRING = "PDF, CSV, XLS/X, JPG, PNG, HEIC";
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 // Define the structure for the upload result object
 interface UploadResult {
@@ -38,14 +42,12 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
   const [acceptedFiles, setAcceptedFiles] = useState<File[]>([]);
   const [rejectedFiles, setRejectedFiles] = useState<FileRejection[]>([]);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const onDrop = useCallback(
     async (accepted: File[], rejected: FileRejection[]) => {
       // Append new files instead of replacing
       setAcceptedFiles(prev => [...prev, ...accepted]);
       setRejectedFiles(prev => [...prev, ...rejected]);
-      setUploadError(null);
 
       if (accepted.length > 0) {
         setIsUploading(true);
@@ -96,26 +98,13 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
         });
 
         // Wait for all uploads to attempt completion
-        const results = await Promise.all(uploadPromises);
-        
-        // Aggregate results for final status message (optional, can rely on individual callbacks)
-        const failedUploads = results.filter(r => !r.success && !r.duplicate); // Exclude duplicates from error count
-        const duplicateUploads = results.filter(r => r.duplicate);
-
-        if (failedUploads.length > 0) {
-          setUploadError(`Failed to upload ${failedUploads.length} file(s). Check console.`);
-        } else if (duplicateUploads.length > 0 && acceptedFiles.length === 0) { 
-             // If only duplicates were uploaded, clear generic error
-             setUploadError(null);
-        } else if (failedUploads.length === 0 && duplicateUploads.length === 0) {
-             setUploadError(null); // Clear error if all succeed
-        }
+        await Promise.all(uploadPromises);
         
         setIsUploading(false);
         console.log("Finished processing batch.");
       }
     },
-    [onUploadComplete, acceptedFiles.length]
+    [onUploadComplete]
   );
 
   const { 
@@ -130,7 +119,7 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
     onDrop,
     accept: acceptedFileTypes,
     multiple: true, // <-- CHANGE: Allow multiple files
-    maxSize: 15 * 1024 * 1024, // 15MB limit
+    maxSize: MAX_FILE_SIZE_BYTES, // Use constant
     disabled: isUploading, // Disable dropzone while uploading
   });
 
@@ -154,6 +143,22 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
     }
   }
 
+  // Helper to generate specific error messages
+  // Accept readonly array for errors
+  const getFileRejectionMessage = (errors: readonly { code: string; message: string }[]): string => {
+    const messages = errors.map(e => {
+      if (e.code === ErrorCode.FileTooLarge) {
+        return `File is larger than ${MAX_FILE_SIZE_MB}MB limit.`;
+      }
+      if (e.code === ErrorCode.FileInvalidType) {
+        return `Invalid file type. Accepted: ${ACCEPTED_FORMATS_STRING}.`;
+      }
+      return e.message; // Fallback for other errors
+    });
+    // Remove duplicates and join
+    return [...new Set(messages)].join(', '); 
+  };
+
   return (
     <div className="w-full max-w-lg mx-auto">
       {/* Hide the visual dropzone box on mobile, retain underlying input functionality */}
@@ -172,7 +177,7 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
               <p className="mb-2 text-sm text-muted-foreground">
                 <span className="font-semibold">Click to upload</span> or drag and drop
               </p>
-              <p className="text-xs text-muted-foreground/80">PDF, CSV, XLS/XLSX, JPG, PNG, HEIC (Max 15MB)</p>
+              <p className="text-xs text-muted-foreground/80">{ACCEPTED_FORMATS_STRING} (Max {MAX_FILE_SIZE_MB}MB)</p>
             </>
           )}
         </div>
@@ -188,12 +193,6 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
         <UploadCloud className="mr-2 h-4 w-4" />
         {isUploading ? 'Uploading...' : 'Upload File'}
       </Button>
-
-      {uploadError && (
-          <div className="mt-4 text-center text-sm text-destructive font-medium">
-              Error: {uploadError}
-          </div>
-      )}
 
       {/* Display accepted files - show files waiting to be uploaded */}
       {acceptedFiles.length > 0 && (
@@ -213,20 +212,20 @@ export function FileUpload({ onUploadComplete }: FileUploadProps) {
         </div>
       )}
 
-      {/* Display rejected files */}
+      {/* Display rejected files with specific messages */}
       {rejectedFiles.length > 0 && (
         <div className="mt-4 space-y-2">
           <h4 className="text-sm font-medium text-destructive">Rejected file(s):</h4>
           {rejectedFiles.map(({ file, errors }, index) => (
             <div key={`${file.name}-${file.lastModified}-${index}`} className="flex items-center justify-between p-2 border rounded-md bg-red-50 border-red-200">
-                 <div className="flex items-center gap-2">
-                    <FileIcon className="h-5 w-5 text-red-600" />
-                    <div>
-                        <span className="text-sm text-red-800">{file.name} ({Math.round(file.size / 1024)} KB)</span>
-                        <p className="text-xs text-red-700">{errors.map(e => e.message).join(', ')}</p>
+                 <div className="flex items-center gap-2 overflow-hidden">
+                    <FileIcon className="h-5 w-5 text-red-600 flex-shrink-0" />
+                    <div className="min-w-0">
+                        <span className="text-sm text-red-800 block truncate" title={file.name}>{file.name} ({Math.round(file.size / 1024)} KB)</span>
+                        <p className="text-xs text-red-700">{getFileRejectionMessage(errors)}</p>
                     </div>
                  </div>
-              <button onClick={() => removeFile({file, errors})}>
+              <button onClick={() => removeFile({file, errors})} className="flex-shrink-0">
                   <X className="h-4 w-4 text-red-600 hover:text-red-800" />
               </button>
             </div>
