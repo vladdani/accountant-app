@@ -1,248 +1,281 @@
 'use server';
 
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { CoreMessage, generateText, tool } from 'ai';
-import { z } from 'zod';
-import { queryStructuredDocumentsAction } from './query-structured-documents';
-import { createClient } from '@/utils/supabase/server';
-
-// --- Types ---
-// Define structure for the results we *expect* from the (yet to be created) structured query action
-interface StructuredQueryResult {
-  id: string;
-  name: string | null; // original_filename
-  url: string | null; // document_url
-  vendor: string | null;
-  document_date: string | null; // YYYY-MM-DD
-  document_type: string | null;
-  total_amount: number | null;
-  currency: string | null;
-}
-// Define shape of the successful tool execution result for structured query
-type StructuredToolExecuteSuccessResult = {
-  queryResults: StructuredQueryResult[] | string; // Can be results or "not found" string
-  error?: undefined;
-};
+import type { CoreMessage } from 'ai';
+import { createClient } from '@supabase/supabase-js';
 
 // --- Constants and Setup ---
-// Remove unused constant
-// const TEMP_TEST_USER_ID = '0d4f5e60-258a-46ea-92ce-c0ffc9263e1b';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) { 
+  throw new Error('Missing GOOGLE_GENERATIVE_AI_API_KEY environment variable.'); 
+}
 
-// ... (Google API Key Check, AI Client Init) ...
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) { throw new Error('Missing GOOGLE_GENERATIVE_AI_API_KEY environment variable.'); }
-if (!supabaseUrl || !supabaseAnonKey) { throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable.'); }
-const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY });
-const model = google('models/gemini-2.0-flash');
-const querySchema = z.object({ userQuery: z.string().min(1), chatHistory: z.array(z.custom<CoreMessage>()).optional(), });
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-// ---+++ NEW Structured Query Tool Definition +++---
-const queryDocumentsTool = tool({
-  description: "Query the user's processed documents based on structured criteria like vendor, date range, document type, amount, or currency. Use this when the user asks to find or filter documents using these kinds of specific fields.",
-  parameters: z.object({
-    vendor: z.string().optional().describe("The vendor or supplier name to filter by (partial or full match)."),
-    document_type: z.string().optional().describe("The type of document to filter by (e.g., 'invoice', 'receipt', 'contract', 'quote'). Interpret the user\'s request flexibly; if they mention a general term (like \'payment\' or \'agreement\'), determine the most probable stored document type(s) to search for based on common business practices."),
-    start_date: z.string().optional().describe("The start date for filtering (inclusive), format YYYY-MM-DD. Example: For a query 'in 2023', use '2023-01-01'."),
-    end_date: z.string().optional().describe("The end date for filtering (inclusive), format YYYY-MM-DD. Example: For a query 'in 2023', use '2023-12-31'."),
-    min_amount: z.number().optional().describe("The minimum total amount to filter by."),
-    max_amount: z.number().optional().describe("The maximum total amount to filter by."),
-    currency: z.string().optional().describe("The 3-letter currency code to filter by (e.g., 'IDR', 'USD')."),
-  }),
-  // Execute function: This might not be strictly necessary if we handle execution
-  // directly based on toolCall.toolName below, but keep for potential future use/clarity.
-  // Removed unused _context argument.
-  execute: async (args): Promise<StructuredToolExecuteSuccessResult | { queryResults: string, error: string }> => {
-    console.log(`AI requested structured query with args (in execute):`, args);
-    // This execute function *should* ideally contain the logic to call queryStructuredDocumentsAction,
-    // but we are handling it directly in the main action flow for now.
-    // To avoid duplication, we can call the action here.
-    const result = await queryStructuredDocumentsAction(args);
-    if (!result.success) {
-      console.error('queryStructuredDocumentsAction failed (in execute):', result.error);
-      return { queryResults: "", error: `Failed to query documents: ${result.error || 'Unknown database error'}` };
-    }
-    if (!result.data || result.data.length === 0) {
-      console.log('queryStructuredDocumentsAction returned no results (in execute).');
-      return { queryResults: "No documents found matching those criteria." };
-    }
-    console.log(`queryStructuredDocumentsAction returned ${result.data.length} results (in execute).`);
-    return { queryResults: result.data };
-  },
-});
-// ---++++++++++++++++++++++++++++++++++++++++++++---
+// Define interfaces for document types
+interface Document {
+  id: string;
+  file_path?: string;
+  document_url?: string;
+  uploaded_at?: string;
+  original_filename?: string | null;
+  document_type?: string | null;
+  document_date?: string | null;
+  total_amount?: number | null;
+  vendor?: string | null;
+  description?: string | null;
+}
 
-// --- Main Action ---
-export async function handleUserSearchQueryAction(
-  input: z.infer<typeof querySchema>
-): Promise<{ success: boolean; response?: string; error?: string }> {
-
-  // --- Authentication ---
-  let currentUserId: string | null = null;
+// Main action for handling user search queries
+export async function handleUserSearchQueryAction({
+  userQuery,
+  userId
+}: {
+  userQuery: string;
+  chatHistory?: CoreMessage[]; // Keep as optional but unused parameter
+  userId?: string;
+}): Promise<{ success: boolean; response?: string; error?: string }> {
   try {
-      // Ensure we properly await the client creation
-      const supabase = await createClient();
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) { throw new Error("Authentication failed"); }
-      currentUserId = user.id;
-      console.log(`Using real ID: ${currentUserId}`);
-  } catch (catchError) {
-      console.error('Auth Error in handleUserSearchQueryAction:', catchError);
-      return { success: false, error: 'User identification failed.' };
-  }
-  // ------------------------------------------
+    // Extract user ID from auth if not provided
+    let searchUserId = userId;
+    if (!searchUserId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      searchUserId = user?.id;
+    }
 
-  // --- Input Validation ---
-  const validationResult = querySchema.safeParse(input);
-  if (!validationResult.success) { return { success: false, error: validationResult.error.errors.map(e => e.message).join(', ') }; }
-  const { userQuery, chatHistory = [] } = validationResult.data;
-  // ------------------------------------------
-
-  // --- Initial Message History ---
-  const messages: CoreMessage[] = [
-    { role: 'system', content: 'You are a helpful assistant for managing documents. You query documents using the provided tool based on criteria like vendor, date, type, amount, and currency. When processing a user query, interpret their intent regarding the document type flexibly. If the user mentions a term like \'payment\', \'agreement\', \'bill\', etc., use your understanding to search for the most likely corresponding stored document types (e.g., invoice, receipt, contract, quote). Prioritize finding relevant documents even if the user\'s terminology doesn\'t exactly match the stored type. When presenting results, list specific data points if requested, or provide a list of matching documents with key details (name, vendor, date, amount, description, discount if available). Always base your response on the data returned by the tool.' },
-    ...chatHistory,
-    { role: 'user', content: userQuery },
-  ];
-  // -----------------------------
-
-  try {
-    // --- First AI Call (Determine if tool is needed) ---
-    console.log("--- Sending to AI (First Call) ---");
-    console.log(JSON.stringify(messages, null, 2));
-    let result = await generateText({
-      model: model,
-      messages: messages,
-      tools: { query_documents: queryDocumentsTool },
-    });
-    console.log("--- Received from AI (First Call) ---", result);
-    // ----------------------------------------------------
-
-    // --- Handle Tool Calls (Standard Pattern) ---
-    while (result.finishReason === 'tool-calls') {
-      console.log('AI wants to call tools:', result.toolCalls);
-      const toolCallResults: CoreMessage[] = [];
-
-      // Define an interface for the tool result content (can contain results or error)
-      interface ToolResultContent {
-        results?: string; // JSON string of StructuredQueryResult[]
-        error?: string;
-      }
-
-      for (const toolCall of result.toolCalls) {
-        let toolCallResultContent: ToolResultContent; 
-        const toolName = toolCall.toolName;
-
-        // ---+++ ADDED LOGGING +++---
-        console.log(`[AI Search] Attempting Tool Call: ${toolName}`);
-        console.log(`[AI Search] Raw Args from AI:`, JSON.stringify(toolCall.args, null, 2));
-        // ---+++++++++++++++++++++---
-
-        console.log(`Processing tool call: ${toolName} with args:`, toolCall.args);
-
-        try {
-          if (toolName === 'query_documents') {
-            // Validate args BEFORE calling action
-            const validatedArgs = queryDocumentsTool.parameters.parse(toolCall.args);
-            console.log(`[AI Search] Validated Args for DB Query:`, JSON.stringify(validatedArgs, null, 2)); // Log validated args
-            
-            const actionResult = await queryStructuredDocumentsAction(validatedArgs);
-
-            if (!actionResult.success) {
-              console.error('queryStructuredDocumentsAction failed:', actionResult.error);
-              toolCallResultContent = { error: `Failed to query documents: ${actionResult.error || 'Unknown database error'}` };
-            } else if (!actionResult.data || actionResult.data.length === 0) {
-              console.log('queryStructuredDocumentsAction returned no results.');
-              toolCallResultContent = { results: "[]" }; // Send empty array as JSON string
-            } else {
-              console.log(`queryStructuredDocumentsAction returned ${actionResult.data.length} results.`);
-              // Pass the actual structured data back to the AI as a JSON string.
-              const resultsJsonString = JSON.stringify(actionResult.data, null, 2);
-              toolCallResultContent = { results: resultsJsonString }; 
-            }
-          } else {
-            console.warn(`Unsupported tool requested: ${toolName}`);
-            toolCallResultContent = { error: `Unsupported tool: ${toolName}` };
-          }
-        } catch (error) {
-          console.error(`Error executing tool ${toolName}:`, error);
-          toolCallResultContent = { error: `Error processing tool ${toolName}: ${error instanceof Error ? error.message : String(error)}` };
-        }
-
-        // Append the tool result message
-        toolCallResults.push({
-          role: 'tool',
-          content: [
-            { 
-              type: 'tool-result',
-              toolCallId: toolCall.toolCallId,
-              toolName: toolName,
-              result: toolCallResultContent // Contains { results: "[...]" } or { error: "..." }
-            }
-          ]
-        });
-      } // End for loop over toolCalls
-
-      // Construct the assistant message containing the initial response + tool calls
-      const assistantMessageWithToolCalls: CoreMessage = {
-        role: 'assistant',
-        content: [
-          // Include assistant's text response (if any)
-          ...(result.text ? [{ type: 'text' as const, text: result.text }] : []), 
-          // Map the tool calls into the content array
-          ...result.toolCalls.map((tc) => ({
-            type: 'tool-call' as const, 
-            toolCallId: tc.toolCallId,
-            toolName: tc.toolName,
-            args: tc.args,
-          })),
-        ],
+    if (!searchUserId) {
+      return {
+        success: false,
+        error: "User not authenticated"
       };
-      
-      // Add assistant message and tool results to history
-      messages.push(assistantMessageWithToolCalls); 
-      messages.push(...toolCallResults); 
-
-      console.log("--- Sending to AI (Next Call with Tool Results) ---");
-      console.log(JSON.stringify(messages, null, 2));
-
-      // Call generateText again
-      result = await generateText({
-        model: model,
-        messages: messages,
-        tools: { query_documents: queryDocumentsTool }, 
-      });
-
-      console.log("--- Received from AI (After Tool Call) ---", result);
-    } // End while loop (tool-calls)
-    // -------------------------------------------
-
-    // --- Final Response --- 
-    if (result.finishReason === 'stop') {
-      console.log('AI stopped, final response:', result.text);
-      // Ensure result.text is not null or undefined before returning
-      if (result.text) {
-          return { success: true, response: result.text };
-      } else {
-          console.error('AI stopped but provided no text response.');
-          return { success: false, error: 'AI completed processing but did not provide a response.' };
-      }
-    } else {
-      console.error('Unexpected final finish reason:', result.finishReason, result.toolCalls);
-      return { success: false, error: `AI processing ended unexpectedly with reason: ${result.finishReason}.` };
     }
-    // ----------------------
 
-  } catch (err) {
-    // --- Handle Top-Level Errors ---
-    console.error('Error in handleUserSearchQueryAction:', err);
-    const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
-    if (errorMessage.includes('API key') || errorMessage.includes('quota')) { return { success: false, error: `AI API Error: ${errorMessage}`}; }
-    // Add a specific check for the empty content error
-    if (errorMessage.includes('GenerateContentRequest.content.contents.parts must not be empty')) {
-        console.error('Detected empty content error. Review message history construction.');
-        return { success: false, error: 'AI request failed due to empty content. Please check the logs.' };
+    // 1. Generate embedding for the search query using Google's embedding model
+    const queryEmbedding = await generateEmbedding(userQuery);
+    if (!queryEmbedding) {
+      return {
+        success: false,
+        error: "Failed to generate embedding for search query"
+      };
     }
-    return { success: false, error: errorMessage };
+
+    // 2. Perform semantic search
+    const searchResults = await performSemanticSearch(
+      searchUserId,
+      queryEmbedding,
+      userQuery
+    );
+
+    // 3. Generate a response based on the search results
+    const response = await generateSearchResponse(
+      userQuery, 
+      searchResults
+    );
+
+    // 4. Log this interaction to improve future searches
+    await logSearchInteraction(
+      searchUserId,
+      userQuery,
+      searchResults.map((r: Document) => r.id),
+      queryEmbedding
+    );
+
+    return {
+      success: true,
+      response
+    };
+  } catch (error) {
+    console.error('Error in search query action:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error in search'
+    };
   }
-} // End of handleUserSearchQueryAction
+}
+
+// Generate embedding for a text string using Google's embedding model
+async function generateEmbedding(text: string): Promise<number[] | null> {
+  try {
+    // Use Google's embedding model via the embedding API
+    const embeddingResponse = await fetch('https://generativelanguage.googleapis.com/v1/models/embedding-001:embedContent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': process.env.GOOGLE_GENERATIVE_AI_API_KEY || '',
+      },
+      body: JSON.stringify({
+        model: 'models/embedding-001',
+        content: {
+          parts: [{ text: text.replace(/\n/g, " ") }]
+        }
+      })
+    });
+
+    if (!embeddingResponse.ok) {
+      throw new Error(`Embedding API error: ${embeddingResponse.status} ${embeddingResponse.statusText}`);
+    }
+
+    const result = await embeddingResponse.json();
+    return result.embedding.values;
+  } catch (error) {
+    console.error('Error generating embedding:', error);
+    return null;
+  }
+}
+
+// Perform semantic search with fallbacks to keyword search
+async function performSemanticSearch(
+  userId: string,
+  embedding: number[],
+  originalQuery: string
+): Promise<Document[]> {
+  // 1. First try semantic search with embeddings
+  const { data: semanticResults, error } = await supabase
+    .rpc('match_documents', {
+      query_embedding: embedding,
+      match_threshold: 0.5, // Adjust threshold as needed
+      match_count: 5, // Number of results to return
+      user_id: userId
+    });
+
+  if (error) {
+    console.warn('Semantic search error:', error);
+    // Initialize with empty array if error
+    const emptyResults: Document[] = [];
+    
+    // 2. If semantic search had an error, try keyword search as fallback
+    const { data: keywordResults, error: keywordError } = await performKeywordSearch(
+      userId,
+      originalQuery
+    );
+
+    if (keywordError) {
+      console.warn('Keyword search error:', keywordError);
+      return emptyResults;
+    } 
+    
+    return keywordResults || emptyResults;
+  }
+
+  // If semantic search returned results but not enough, supplement with keyword search
+  if (semanticResults && semanticResults.length < 3) {
+    const { data: keywordResults, error: keywordError } = await performKeywordSearch(
+      userId,
+      originalQuery
+    );
+
+    if (!keywordError && keywordResults && keywordResults.length > 0) {
+      // Merge semantic and keyword results, removing duplicates
+      const allDocIds = new Set(semanticResults.map((doc: Document) => doc.id));
+      const combinedResults = [...semanticResults];
+      
+      for (const doc of keywordResults as Document[]) {
+        if (!allDocIds.has(doc.id)) {
+          combinedResults.push(doc);
+          allDocIds.add(doc.id);
+        }
+      }
+      
+      return combinedResults;
+    }
+  }
+
+  return semanticResults || [];
+}
+
+// Perform keyword-based search as a fallback
+async function performKeywordSearch(
+  userId: string,
+  query: string
+): Promise<{ data: Document[] | null, error: Error | null }> {
+  // Split query into keywords
+  const keywords = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map(word => word.replace(/[^\w]/g, ''))
+    .filter(word => word.length >= 3);
+  
+  if (keywords.length === 0) {
+    return { data: [], error: null };
+  }
+
+  // Search in multiple fields with ILIKE for each keyword
+  let queryBuilder = supabase
+    .from('documents')
+    .select('*')
+    .eq('uploaded_by', userId);
+
+  // Add search conditions
+  keywords.forEach((keyword) => {
+    // Search across multiple columns for each keyword
+    queryBuilder = queryBuilder.or(
+      `original_filename.ilike.%${keyword}%,` +
+      `document_type.ilike.%${keyword}%,` +
+      `vendor.ilike.%${keyword}%,` +
+      `description.ilike.%${keyword}%`
+    );
+  });
+
+  return await queryBuilder.limit(5);
+}
+
+// Generate a response based on search results
+async function generateSearchResponse(
+  query: string,
+  results: Document[]
+): Promise<string> {
+  // If no results found
+  if (!results || results.length === 0) {
+    return `I couldn't find any documents matching "${query}". Try a different search term or check if the documents have been uploaded.`;
+  }
+
+  // Format response based on the documents found
+  const formattedResults = results.map((doc: Document) => {
+    // Extract key information
+    const date = doc.document_date ? new Date(doc.document_date).toLocaleDateString() : 'Unknown date';
+    const vendor = doc.vendor || 'Unknown vendor';
+    const type = doc.document_type || 'document';
+    const amount = doc.total_amount ? `${doc.total_amount}` : '';
+    const description = doc.description || '';
+
+    // Return formatted string for this document
+    return `- ${type} from ${vendor}, dated ${date}${amount ? `, for ${amount}` : ''}${description ? `. The description says "${description}"` : ''}.`;
+  }).join('\n');
+
+  // Create appropriate introduction based on number of results
+  let intro = '';
+  if (results.length === 1) {
+    const doc = results[0];
+    const type = doc.document_type || 'document';
+    const vendor = doc.vendor || 'Unknown vendor';
+    intro = `I found one ${type} from ${vendor}`;
+  } else {
+    intro = `I found ${results.length} documents matching your search:`;
+  }
+
+  return `${intro}\n\n${formattedResults}\n\nWould you like to know anything else about ${results.length === 1 ? 'this document' : 'these documents'}?`;
+}
+
+// Log search interaction to improve future searches
+async function logSearchInteraction(
+  userId: string,
+  query: string,
+  resultIds: string[],
+  queryEmbedding: number[]
+): Promise<void> {
+  try {
+    // Store the search interaction
+    await supabase
+      .from('search_logs')
+      .insert({
+        user_id: userId,
+        query,
+        result_document_ids: resultIds,
+        query_embedding: queryEmbedding,
+        created_at: new Date().toISOString()
+      });
+  } catch (error) {
+    // Log but don't fail the search if this fails
+    console.error('Error logging search interaction:', error);
+  }
+}

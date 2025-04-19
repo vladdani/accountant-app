@@ -14,25 +14,22 @@ import { cn } from '@/lib/utils'; // Import cn utility
 // import { motion } from 'framer-motion';
 import { FileUpload } from "@/components/file-upload";
 import { 
-  // BarChart3, 
-  // Users, 
-  // CreditCard, 
   Settings,
-  // PlusCircle,
   Clock,
-  // TrendingUp,
-  // Activity,
   Folder,
   Star,
   Inbox,
-  // Upload,
-  // LogOut, // No longer used in header
-  FileText, // Generic document icon
-  // Calendar // Commented out, will be used for date filtering later
+  FileText,
   MessageSquare,
   Send,
   Loader2,
   Menu,
+  Plus,
+  Home,
+  Building2,
+  ExternalLink,
+  Download,
+  X,
 } from 'lucide-react';
 // import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 // import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // No longer used
@@ -75,6 +72,16 @@ import { Textarea } from "@/components/ui/textarea";
 // Import new sidebar components
 // Remove unused SidebarLink import
 import { Sidebar, SidebarBody /*, SidebarLink */ } from "@/components/ui/sidebar";
+
+// Add Dialog components from shadcn/ui
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 // --- Types ---
 interface Document {
@@ -171,7 +178,7 @@ export default function Dashboard() {
   // State for document display and filtering
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState<boolean>(true);
-  const [selectedFilter, setSelectedFilter] = useState<Filter>({ type: 'special', value: 'all' });
+  const [selectedFilter, setSelectedFilter] = useState<Filter>({ type: 'special', value: 'recent' }); // Default to recent instead of 'all'
   const [availableTypes, setAvailableTypes] = useState<string[]>([]);
   const [isLoadingTypes, setIsLoadingTypes] = useState<boolean>(true);
   const [processingDocId, setProcessingDocId] = useState<string | null>(null); // State for AI processing
@@ -185,12 +192,22 @@ export default function Dashboard() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]); // Initialize empty
   const [isLoadingChat, setIsLoadingChat] = useState<boolean>(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false); // State for mobile sidebar
-  const [mobileView, setMobileView] = useState<'chat' | 'documents'>('chat'); // State for mobile view ('chat' or 'documents')
+  const [viewMode, setViewMode] = useState<'chat' | 'documents' | 'table' | 'folder'>('table'); // Default to table view instead of 'chat'
   const chatContainerRef = useRef<HTMLDivElement>(null); 
 
   // Add new state for virtual file system
   const [fileSystem, setFileSystem] = useState<FileNode[]>([]);
   const [isLoadingFileSystem, setIsLoadingFileSystem] = useState<boolean>(true);
+
+  // Add state for upload dialog
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false);
+
+  // Add state for document preview
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState<boolean>(false);
+
+  // Determine if user has documents
+  const hasDocuments = !isLoadingDocuments && documents.length > 0;
 
   // --- Helper Functions for Data Fetching ---
   const fetchTypes = useCallback(async () => {
@@ -317,95 +334,85 @@ export default function Dashboard() {
 
     console.log("Starting fetchDocuments for user:", user.id, "with filter:", selectedFilter);
     setIsLoadingDocuments(true);
-    let query = supabase
-      .from('documents')
-      .select('id, file_path, document_url, uploaded_at, original_filename, document_type, document_date, total_amount, vendor')
-      .eq('uploaded_by', user.id);
-
-    // Apply filter logic
-    if (selectedFilter.type === 'category') {
-      query = query.eq('document_type', selectedFilter.value);
-      console.log("Applied category filter:", selectedFilter.value);
-    } else if (selectedFilter.type === 'date') {
-      // TODO: Implement date filtering logic (e.g., year-month)
-      console.log("Date filtering not yet implemented");
-    } else if (selectedFilter.type === 'path') {
-      // Virtual file system path filtering
-      // The path format is /Year/Month/Vendor
-      const pathParts = selectedFilter.value.split('/').filter(Boolean);
-      
-      if (pathParts.length >= 1) {
-        // Year filter
-        const year = pathParts[0];
-        // Filter by year part of document_date
-        query = query.ilike('document_date', `${year}-%`);
-        
-        if (pathParts.length >= 2) {
-          // Month filter - need to convert month name to number
-          const monthName = pathParts[1];
-          const monthIndex = ["January", "February", "March", "April", "May", "June", 
-                             "July", "August", "September", "October", "November", "December"]
-                             .indexOf(monthName);
-          
-          if (monthIndex !== -1) {
-            const monthNum = (monthIndex + 1).toString().padStart(2, '0');
-            // Refine filter to include month
-            query = query.ilike('document_date', `${year}-${monthNum}-%`);
-            
-            if (pathParts.length >= 3) {
-              // Vendor filter
-              const vendor = pathParts[2];
-              query = query.eq('vendor', vendor);
-            }
-          }
-        }
-      }
-      
-      console.log("Applied path filter:", selectedFilter.value);
-    } else if (selectedFilter.type === 'special') {
-      if (selectedFilter.value === 'recent') {
-        query = query.order('uploaded_at', { ascending: false }).limit(20);
-        console.log("Applied recent filter (limit 20)");
-      } else if (selectedFilter.value === 'starred') {
-        // TODO: Add is_starred column or similar logic
-        console.log("Starred filtering not yet implemented");
-      } else { // 'all'
-        query = query.order('uploaded_at', { ascending: false });
-        console.log("Applied all documents filter (sorted by upload date)");
-      }
-    } else { // Default to all
-       query = query.order('uploaded_at', { ascending: false });
-       console.log("Applied default filter (all docs, sorted by upload date)");
-    }
-
+    
     try {
-      console.log("Executing Supabase documents query...");
-      const { data, error } = await query;
-      // Log raw result before processing
-      console.log("Documents query raw result:", { 
-        count: data?.length || 0, 
-        error 
-      });
-      
-      // Log full data in development only
-      if (process.env.NODE_ENV === 'development') {
-        console.log("Full documents data:", data);
+      // Start with a simple query to get user's documents
+      let query = supabase
+        .from('documents')
+        .select('id, file_path, document_url, uploaded_at, original_filename, document_type, document_date, total_amount, vendor')
+        .eq('uploaded_by', user.id);
+
+      // Apply basic sorting/filtering
+      if (selectedFilter.type === 'category') {
+        // Simple category filter
+        query = query.eq('document_type', selectedFilter.value);
+      } else if (selectedFilter.type === 'special' && selectedFilter.value === 'recent') {
+        // Recent documents
+        query = query.order('uploaded_at', { ascending: false }).limit(20);
+      } else {
+        // Default sorting for all documents and other filters
+        query = query.order('uploaded_at', { ascending: false });
       }
+
+      // Execute query
+      const { data, error } = await query;
       
       if (error) {
-           console.error("!!! Error explicitly thrown during fetchDocuments:", error); // Add explicit log
-           throw error;
+        console.log("Error in Supabase query:", error.message);
+        setDocuments([]);
+      } else {
+        console.log(`Fetched ${data?.length || 0} documents`);
+        
+        // For path filtering, do it in memory rather than in query
+        if (selectedFilter.type === 'path' && data) {
+          const pathParts = selectedFilter.value.split('/').filter(Boolean);
+          let filteredData = [...data];
+          
+          if (pathParts.length > 0) {
+            // Filter by year
+            const year = pathParts[0];
+            filteredData = filteredData.filter(doc => 
+              doc.document_date && doc.document_date.startsWith(year)
+            );
+            
+            if (pathParts.length > 1) {
+              // Filter by month
+              const monthName = pathParts[1];
+              const monthIndex = ["January", "February", "March", "April", "May", "June", 
+                                "July", "August", "September", "October", "November", "December"]
+                                .indexOf(monthName);
+                                  
+              if (monthIndex !== -1) {
+                const monthNum = (monthIndex + 1).toString().padStart(2, '0');
+                filteredData = filteredData.filter(doc => 
+                  doc.document_date && doc.document_date.startsWith(`${year}-${monthNum}`)
+                );
+                
+                if (pathParts.length > 2) {
+                  // Filter by vendor
+                  const vendor = pathParts[2];
+                  filteredData = filteredData.filter(doc => doc.vendor === vendor);
+                }
+              }
+            }
+          }
+          
+          setDocuments(filteredData);
+        } else {
+          // For non-path filters, use the data directly
+          setDocuments(data || []);
+        }
+        
+        // Always rebuild the file system after fetching documents
+        buildFileSystem(data || []);
       }
-      setDocuments(data || []);
     } catch (error) {
-      // Add more detail to catch log
-      console.error(`!!! CATCH block hit in fetchDocuments for filter ${selectedFilter.value}:`, error instanceof Error ? error.message : error);
+      console.error("Error in fetchDocuments:", error);
       setDocuments([]);
     } finally {
-      console.log("Finished fetchDocuments, setting loading false."); // Log finally
       setIsLoadingDocuments(false);
     }
-  }, [user?.id, selectedFilter]);
+  }, [user?.id, selectedFilter, buildFileSystem]);
 
   // Function to fetch document count
   const fetchDocumentCount = useCallback(async () => {
@@ -574,6 +581,18 @@ export default function Dashboard() {
     }
   }, [documents, isLoadingDocuments, buildFileSystem]);
 
+  // Add a useEffect to switch to table view when path filter is applied
+  useEffect(() => {
+    // When a path filter is selected, switch to folder view
+    if (selectedFilter.type === 'path') {
+      setViewMode('folder');
+      console.log(`Path navigation: ${selectedFilter.value}`);
+    } else if (selectedFilter.type === 'special' || selectedFilter.type === 'category') {
+      // For recent, all documents, or category filters - use table view
+      setViewMode('table');
+    }
+  }, [selectedFilter]);
+
   // --- Helper Functions --- 
   const handleUploadSuccess = (result: { 
     success: boolean; 
@@ -611,7 +630,7 @@ export default function Dashboard() {
 
     // On mobile screens (heuristic check, adjust breakpoint if needed)
     if (window.innerWidth < 768) { 
-      setMobileView('documents'); // Switch to documents view
+      setViewMode('documents'); // Switch to documents view
     }
     setIsMobileSidebarOpen(false); // Always close sidebar after selection
   };
@@ -726,6 +745,27 @@ export default function Dashboard() {
     );
   };
 
+  // Add preview handler
+  const handlePreview = (doc: Document) => {
+    setPreviewDoc(doc);
+    setIsPreviewOpen(true);
+  };
+
+  // Add download handler
+  const handleDownload = (doc: Document | null) => {
+    if (!doc || !doc.document_url) return;
+    
+    // Create a temporary anchor element
+    const a = document.createElement('a');
+    a.href = doc.document_url;
+    a.download = generateDisplayFilename(doc); // Use the display filename for download
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   // --- Conditional Returns *AFTER* all hooks ---
   if (isAuthLoading /*|| isTrialLoading*/) {
      return (
@@ -788,7 +828,7 @@ export default function Dashboard() {
           <SidebarBody className="justify-between gap-10 px-0 py-4 border-r dark:border-slate-700"> {/* Add border */} 
              {/* ... existing sidebar content (Main links, Categories, Settings) ... */}
                <div className="flex flex-col flex-1 overflow-y-auto px-4"> {/* Inner scrollable area */} 
-                  {/* Using Buttons for links to maintain style/click handling */} 
+                  {/* Main section */}
                   <h3 className="text-xs font-semibold text-slate-500 uppercase mb-2">Main</h3>
                   {sidebarLinks.map((link, idx) => (
                      <Button
@@ -802,6 +842,8 @@ export default function Dashboard() {
                         {link.label}
                      </Button>
                   ))}
+                  
+                  {/* Categories section */}
                   <h3 className="text-xs font-semibold text-slate-500 uppercase mt-4 mb-2">Categories</h3>
                   {isLoadingTypes ? (
                      <div className="space-y-2">
@@ -822,22 +864,43 @@ export default function Dashboard() {
                   ) : (
                     <p className="text-xs text-slate-500">No categories found.</p>
                   )}
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase mt-4 mb-2">File Explorer</h3>
-                  {isLoadingFileSystem ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-8 w-full" />
-                      <Skeleton className="h-8 w-full" />
-                    </div>
-                  ) : fileSystem.length > 0 ? (
-                    <div className="space-y-1 max-h-60 overflow-y-auto">
-                      {fileSystem.map((node, index) => (
-                        <FileTreeNode key={`root-${index}`} node={node} />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-500">No documents with dates found.</p>
+                  
+                  {/* Upload button - only shown when user has documents */}
+                  {hasDocuments && (
+                    <>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase mt-4 mb-2">Actions</h3>
+                      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button variant="ghost" className="w-full justify-start gap-2">
+                            <Plus className="h-4 w-4" />
+                            Upload Document
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-md">
+                          <DialogHeader>
+                            <DialogTitle>Upload Document</DialogTitle>
+                            <DialogDescription>
+                              Drag and drop files or click to browse
+                            </DialogDescription>
+                          </DialogHeader>
+                          <FileUpload 
+                            onUploadComplete={(result) => {
+                              handleUploadSuccess(result);
+                              // Close the dialog after successful upload
+                              if (result.success) {
+                                setTimeout(() => setIsUploadDialogOpen(false), 1000);
+                              }
+                            }} 
+                          />
+                          {uploadStatus && (
+                            <div className={`mt-4 p-2 rounded text-sm ${uploadStatus.startsWith('File already exists') ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'}`}>
+                              {uploadStatus}
+                            </div>
+                          )}
+                        </DialogContent>
+                      </Dialog>
+                    </>
                   )}
-                  {/* TODO: Date Filter section could go here */} 
                </div>
                {/* Bottom Section (e.g., Settings) */} 
                <div className="mt-auto flex-shrink-0 px-4 pb-4"> {/* Add padding */} 
@@ -854,7 +917,7 @@ export default function Dashboard() {
       {/* Hide Center Content on small screens, show as flex-1 on medium+ */}
       <div className={cn(
          "flex-col overflow-hidden h-full max-h-full", // Basic structure
-         mobileView === 'documents' ? 'flex w-full' : 'hidden', // Mobile visibility
+         viewMode === 'documents' ? 'flex w-full' : 'hidden', // Mobile visibility
          "md:flex md:flex-1 md:w-auto px-4 sm:px-6 lg:px-8 py-4 md:py-6" // Desktop layout & padding
        )}> 
 
@@ -879,12 +942,32 @@ export default function Dashboard() {
                {isLoadingDocuments ? "" : ` (${documents.length})`}
             </h3>
 
+            {/* View toggle buttons */}
+            <div className="flex items-center space-x-2">
+              <Button
+                variant={viewMode === 'table' ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode('table')}
+                title="Table view"
+              >
+                <FileText className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'folder' ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode('folder')}
+                title="Folder view"
+              >
+                <Folder className="h-4 w-4" />
+              </Button>
+            </div>
+
             {/* Switch to Chat Button - Only on mobile */} 
-            <div className="md:hidden"> {/* Wrapper for mobile */} 
+            <div className="md:hidden ml-2"> {/* Wrapper for mobile */} 
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setMobileView('chat')}
+                onClick={() => setViewMode('chat')}
               >
                 <MessageSquare className="h-6 w-6" />
                 <span className="sr-only">Switch to Chat</span>
@@ -892,81 +975,305 @@ export default function Dashboard() {
             </div>
          </div>
 
-         {/* Upload Zone - Adjust top margin/padding if needed after container padding */}
-         <div className="p-4 md:p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-800 flex-shrink-0 mb-4">
-            <FileUpload onUploadComplete={handleUploadSuccess} /> 
-            {uploadStatus && ( 
-             <p className={`mt-4 text-sm font-medium ${uploadStatus.startsWith('File already exists') ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
-                {uploadStatus}
-             </p>
-           )}
-          </div>
+         {/* Upload Zone - Only show for new users with no documents */}
+         {!hasDocuments && (
+           <div className="p-4 md:p-6 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg bg-slate-100 dark:bg-slate-800 flex-shrink-0 mb-4">
+              <div className="text-center max-w-md mx-auto">
+                <h3 className="text-lg font-medium mb-2">Upload your first document</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                  Drag and drop files or click to browse
+                </p>
+                <FileUpload onUploadComplete={handleUploadSuccess} /> 
+                {uploadStatus && ( 
+                  <p className={`mt-4 text-sm font-medium ${uploadStatus.startsWith('File already exists') ? 'text-yellow-600 dark:text-yellow-400' : 'text-green-600 dark:text-green-400'}`}>
+                    {uploadStatus}
+                  </p>
+                )}
+              </div>
+           </div>
+         )}
         
         {/* Document Display Area */} 
         <div className="flex-grow overflow-auto border dark:border-slate-700 rounded-md h-0 min-h-0"> 
-          <Table className="min-w-full">
-            <TableHeader className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10">
-              <TableRow>
-                <TableHead className="w-[40%]">Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Added</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoadingDocuments ? (
-                [...Array(8)].map((_, i) => (
-                 <TableRow key={`skel-${i}`}>
-                   <TableCell><Skeleton className="h-4 w-3/4" /></TableCell>
-                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                   <TableCell className="text-right"><Skeleton className="h-8 w-20 ml-auto" /></TableCell>
-                 </TableRow>
-               ))
-              ) : documents.length > 0 ? (
-                 documents.map((doc) => {
-                   const docType = doc.document_type?.toLowerCase() || 'file';
-                   const docDateStr = doc.document_date || null;
-                   const uploadedDateStr = doc.uploaded_at;
-                   // Use the helper function to generate the display name
-                   const displayFilename = generateDisplayFilename(doc);
-
-                   return (
-                    <TableRow key={doc.id}>
-                      <TableCell className="font-medium truncate max-w-0" title={displayFilename}>
-                          {displayFilename}
-                      </TableCell>
-                      <TableCell>
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-xs capitalize">
-                          {docType}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-sm text-slate-600 dark:text-slate-400">
-                        {docDateStr ? new Date(docDateStr).toLocaleDateString() : '-'}
-                      </TableCell>
-                      <TableCell className="text-sm text-slate-600 dark:text-slate-400">
-                        {uploadedDateStr ? new Date(uploadedDateStr).toLocaleDateString() : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="outline" size="sm" asChild>
-                           <a href={doc.document_url} target="_blank" rel="noopener noreferrer">Preview</a>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              ) : (
-                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-slate-500 dark:text-slate-400">
-                     <FileText size={30} className="mx-auto mb-2"/>
-                     No documents found matching this filter.
-                  </TableCell>
+          {viewMode === 'table' ? (
+            <Table className="min-w-full">
+              <TableHeader className="sticky top-0 bg-slate-100 dark:bg-slate-800 z-10">
+                <TableRow>
+                  <TableHead className="w-[40%]">Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Added</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoadingDocuments ? (
+                  [...Array(8)].map((_, i) => (
+                    <TableRow key={`skel-${i}`}>
+                      <TableCell><Skeleton className="h-4 w-3/4" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="h-8 w-20 ml-auto" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : documents.length > 0 ? (
+                  documents.map((doc) => {
+                    const docType = doc.document_type?.toLowerCase() || 'file';
+                    const docDateStr = doc.document_date || null;
+                    const uploadedDateStr = doc.uploaded_at;
+                    const displayFilename = generateDisplayFilename(doc);
+
+                    return (
+                      <TableRow key={doc.id}>
+                        <TableCell className="font-medium truncate max-w-0" title={displayFilename}>
+                          {displayFilename}
+                        </TableCell>
+                        <TableCell>
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-xs capitalize">
+                            {docType}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">
+                          {docDateStr ? new Date(docDateStr).toLocaleDateString() : '-'}
+                        </TableCell>
+                        <TableCell className="text-sm text-slate-600 dark:text-slate-400">
+                          {uploadedDateStr ? new Date(uploadedDateStr).toLocaleDateString() : '-'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end space-x-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handlePreview(doc)}
+                            >
+                              <FileText className="h-4 w-4 mr-1" />
+                              Preview
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleDownload(doc)}
+                            >
+                              <Download className="h-4 w-4" />
+                              <span className="sr-only">Download</span>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-24 text-center text-slate-500 dark:text-slate-400">
+                      <FileText size={30} className="mx-auto mb-2"/>
+                      No documents found matching this filter.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="p-4">
+              {/* Breadcrumb navigation */}
+              {selectedFilter.type === 'path' && (
+                <nav className="mb-6 flex items-center space-x-2 text-sm">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="flex items-center gap-1"
+                    onClick={() => handleFilterChange({ type: 'special', value: 'all' })}
+                  >
+                    <Home className="h-4 w-4" />
+                    <span>Home</span>
+                  </Button>
+                  
+                  {selectedFilter.value.split('/').filter(Boolean).map((part, index, array) => {
+                    // Build path up to this part
+                    const pathToHere = '/' + array.slice(0, index + 1).join('/');
+                    
+                    return (
+                      <React.Fragment key={index}>
+                        <span className="text-slate-400">/</span>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleFilterChange({ type: 'path', value: pathToHere })}
+                          className={index === array.length - 1 ? 'font-medium' : ''}
+                        >
+                          {part}
+                        </Button>
+                      </React.Fragment>
+                    );
+                  })}
+                </nav>
               )}
-            </TableBody>
-          </Table>
+              
+              {/* Folder/file grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {isLoadingFileSystem ? (
+                  // Loading state for folder view
+                  [...Array(8)].map((_, i) => (
+                    <Skeleton key={`folder-skel-${i}`} className="h-32 rounded-md" />
+                  ))
+                ) : selectedFilter.type === 'path' ? (
+                  // Show contents of current path
+                  (() => {
+                    // Find current node based on path
+                    const pathParts = selectedFilter.value.split('/').filter(Boolean);
+                    console.log('Current path parts:', pathParts);
+                    
+                    if (pathParts.length === 0) {
+                      // Root level - show years
+                      console.log('Showing root level (years):', fileSystem.length);
+                      return fileSystem.length > 0 ? (
+                        fileSystem.map((yearNode, index) => (
+                          <button 
+                            key={`year-${index}`}
+                            onClick={() => handleFilterChange({ type: 'path', value: yearNode.path })}
+                            className="p-4 border rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 hover:shadow-sm transition-all flex flex-col items-center"
+                          >
+                            <Folder className="h-6 w-6 text-blue-500 mb-2" />
+                            <p className="font-medium">{yearNode.name}</p>
+                            <p className="text-xs text-slate-500 mt-1">{yearNode.children.length} folders</p>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="col-span-4 flex flex-col items-center justify-center py-12">
+                          <Folder className="h-8 w-8 text-slate-300 mb-4" />
+                          <h3 className="text-xl font-medium text-slate-700 dark:text-slate-300">No Folders Found</h3>
+                          <p className="text-slate-500 mt-2">Upload documents with dates to view them in folders</p>
+                        </div>
+                      );
+                    }
+                    
+                    // Find current node
+                    let currentNode = null;
+                    let currentLevel = fileSystem;
+                    
+                    for (let i = 0; i < pathParts.length; i++) {
+                      const part = pathParts[i];
+                      const foundNode = currentLevel.find(node => node.name === part);
+                      
+                      if (!foundNode) {
+                        console.log(`Node not found for part: ${part}`);
+                        return (
+                          <div className="col-span-4 text-center py-12">
+                            <p className="text-slate-500">Folder not found. <button onClick={() => handleFilterChange({ type: 'special', value: 'all' })} className="text-blue-500 hover:underline">Return home</button></p>
+                          </div>
+                        );
+                      }
+                      
+                      currentNode = foundNode;
+                      currentLevel = foundNode.children;
+                    }
+                    
+                    // We have the current node, show its contents
+                    if (currentNode) {
+                      console.log(`Showing contents of ${currentNode.name}, children: ${currentNode.children.length}`);
+                      
+                      if (currentNode.type === 'vendor' && currentNode.documents && currentNode.documents.length > 0) {
+                        // If vendor node with documents, show documents
+                        return currentNode.documents.map((doc, index) => (
+                          <div 
+                            key={`doc-${index}`}
+                            className="p-4 border rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 hover:shadow-md transition-all flex flex-col items-center"
+                          >
+                            <FileText className="h-6 w-6 text-blue-500 mb-2" />
+                            <p className="font-medium text-center text-sm line-clamp-2" title={generateDisplayFilename(doc)}>
+                              {generateDisplayFilename(doc)}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1 mb-3">
+                              {doc.document_date ? new Date(doc.document_date).toLocaleDateString() : '-'}
+                            </p>
+                            <div className="mt-auto flex space-x-2 w-full justify-center">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => handlePreview(doc)}
+                                className="flex-1 max-w-24"
+                              >
+                                <FileText className="h-3 w-3 mr-1" />
+                                Preview
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => handleDownload(doc)}
+                                className="flex items-center justify-center"
+                              >
+                                <Download className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ));
+                      } else if (currentNode.children && currentNode.children.length > 0) {
+                        // If folder with children, show children
+                        return currentNode.children.map((childNode, index) => (
+                          <button 
+                            key={`folder-${index}`}
+                            onClick={() => handleFilterChange({ type: 'path', value: childNode.path })}
+                            className="p-4 border rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 hover:shadow-sm transition-all flex flex-col items-center"
+                          >
+                            {childNode.type === 'folder' ? (
+                              <Folder className="h-6 w-6 text-blue-500 mb-2" />
+                            ) : (
+                              <Building2 className="h-6 w-6 text-green-500 mb-2" />
+                            )}
+                            <p className="font-medium">{childNode.name}</p>
+                            {childNode.documents && childNode.documents.length > 0 ? (
+                              <p className="text-xs text-slate-500 mt-1">{childNode.documents.length} document{childNode.documents.length !== 1 ? 's' : ''}</p>
+                            ) : childNode.children && childNode.children.length > 0 ? (
+                              <p className="text-xs text-slate-500 mt-1">{childNode.children.length} folder{childNode.children.length !== 1 ? 's' : ''}</p>
+                            ) : null}
+                          </button>
+                        ));
+                      } else {
+                        // Empty folder
+                        return (
+                          <div className="col-span-4 flex flex-col items-center justify-center py-12">
+                            <Folder className="h-8 w-8 text-slate-300 mb-4" />
+                            <h3 className="text-xl font-medium text-slate-700 dark:text-slate-300">Empty Folder</h3>
+                            <p className="text-slate-500 mt-2">This folder has no contents</p>
+                          </div>
+                        );
+                      }
+                    }
+                    
+                    // Fallback
+                    return (
+                      <div className="col-span-4 flex flex-col items-center justify-center py-12">
+                        <Folder className="h-8 w-8 text-slate-300 mb-4" />
+                        <h3 className="text-xl font-medium text-slate-700 dark:text-slate-300">Navigation Error</h3>
+                        <p className="text-slate-500 mt-2">Could not find the requested folder</p>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  // Show years at top level of file system (default view)
+                  fileSystem.length > 0 ? (
+                    fileSystem.map((yearNode, index) => (
+                      <button 
+                        key={`folder-${index}`}
+                        onClick={() => handleFilterChange({ type: 'path', value: yearNode.path })}
+                        className="p-4 border rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 hover:shadow-sm transition-all flex flex-col items-center"
+                      >
+                        <Folder className="h-6 w-6 text-blue-500 mb-2" />
+                        <p className="font-medium">{yearNode.name}</p>
+                        <p className="text-xs text-slate-500 mt-1">{yearNode.children.length} folders</p>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="col-span-4 flex flex-col items-center justify-center py-12">
+                      <Folder className="h-8 w-8 text-slate-300 mb-4" />
+                      <h3 className="text-xl font-medium text-slate-700 dark:text-slate-300">No Folders Found</h3>
+                      <p className="text-slate-500 mt-2">Upload documents with dates to view them in folders</p>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          )}
         </div> 
       </div>
 
@@ -975,7 +1282,7 @@ export default function Dashboard() {
       {/* Mobile: Show based on mobileView state. Desktop: Always show fixed width */}
       <div className={cn(
          "bg-white dark:bg-neutral-dark flex flex-col h-full max-h-full overflow-hidden", // Basic structure
-         mobileView === 'chat' ? 'flex w-full' : 'hidden', // Mobile visibility
+         viewMode === 'chat' ? 'flex w-full' : 'hidden', // Mobile visibility
          "md:flex md:w-[400px] md:flex-shrink-0 md:border-l dark:border-slate-700 px-4 sm:px-6 lg:px-8 py-4 md:py-6" // Desktop layout & padding
       )}>
          {/* Chat Header */} 
@@ -1070,6 +1377,84 @@ export default function Dashboard() {
            </form>
          </div>
        </div>{/* End Right Chat Panel */}
+
+      {/* Document Preview Dialog */}
+      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+        <DialogContent className="max-w-4xl w-[90vw]">
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <DialogTitle className="truncate max-w-[60%]">
+              {previewDoc ? generateDisplayFilename(previewDoc) : 'Document Preview'}
+            </DialogTitle>
+            <div className="flex space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => handleDownload(previewDoc)}
+                disabled={!previewDoc}
+              >
+                <Download className="h-4 w-4 mr-1" />
+                Download
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                asChild
+              >
+                <a 
+                  href={previewDoc?.document_url || '#'} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLink className="h-4 w-4 mr-1" />
+                  Open
+                </a>
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setIsPreviewOpen(false)}
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </div>
+          </DialogHeader>
+          
+          {previewDoc && (
+            <div className="mt-4 w-full h-[70vh] overflow-hidden">
+              <object 
+                data={previewDoc.document_url}
+                type="application/pdf"
+                className="w-full h-full border-0 rounded-md"
+              >
+                <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-md p-8">
+                  <FileText className="h-16 w-16 text-slate-400 mb-4" />
+                  <p className="text-slate-600 dark:text-slate-300 mb-2">Cannot display this document in the preview.</p>
+                  <div className="flex space-x-4 mt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => handleDownload(previewDoc)}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download
+                    </Button>
+                    <Button asChild>
+                      <a 
+                        href={previewDoc.document_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Open in New Tab
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              </object>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div> // End Main Flex Container
   );
 }
