@@ -87,6 +87,7 @@ interface Document {
   document_type?: string | null;
   document_date?: string | null;
   total_amount?: number | null;
+  vendor_name?: string | null; // Add vendor name field
 }
 
 // Interface for chat messages
@@ -105,6 +106,49 @@ interface Filter {
 }
 
 // --- End Types ---
+
+// --- Helper Function for Filename Generation ---
+function generateDisplayFilename(doc: Document): string {
+  const originalFilename = doc.original_filename || doc.file_path?.split('/').pop() || 'Document';
+  const extensionMatch = originalFilename.match(/\.(\w+)$/);
+  const extension = extensionMatch ? extensionMatch[0] : ''; // e.g., '.pdf'
+
+  // Try to get components for the ideal name
+  const datePart = doc.document_date 
+    ? new Date(doc.document_date).toISOString().split('T')[0] // Format YYYY-MM-DD
+    : null;
+  const vendorPart = doc.vendor_name ? doc.vendor_name.replace(/[/\\?%*:|"<>]/g, '-') : null; // Sanitize vendor name
+  const typePart = doc.document_type ? doc.document_type.replace(/[/\\?%*:|"<>]/g, '-') : null; // Sanitize type
+
+  let filename = '';
+
+  // Ideal: Date - Vendor - Type
+  if (datePart && vendorPart && typePart) {
+    filename = `${datePart} - ${vendorPart} - ${typePart}`;
+  } 
+  // Fallback 1: Date - Type
+  else if (datePart && typePart) {
+    filename = `${datePart} - ${typePart}`;
+  }
+  // Fallback 2: Vendor - Type
+  else if (vendorPart && typePart) {
+    filename = `${vendorPart} - ${typePart}`;
+  }
+  // Fallback 3: Type - Original Name (Truncated)
+  else if (typePart) {
+    const nameWithoutExt = originalFilename.replace(/\.\w+$/, '');
+    filename = `${typePart} - ${nameWithoutExt.substring(0, 20)}${nameWithoutExt.length > 20 ? '...' : ''}`;
+  }
+  // Fallback 4: Original Name (or default)
+  else {
+    filename = originalFilename.replace(/\.\w+$/, ''); // Name without extension
+  }
+
+  // Ensure filename isn't empty and append extension
+  return (filename || 'Document') + extension;
+}
+
+// --- End Helper --- 
 
 export default function Dashboard() {
   // --- ALL HOOKS MUST BE CALLED AT THE TOP LEVEL ---
@@ -177,7 +221,7 @@ export default function Dashboard() {
     setIsLoadingDocuments(true);
     let query = supabase
       .from('documents')
-      .select('id, file_path, document_url, uploaded_at, original_filename, document_type, document_date, total_amount')
+      .select('id, file_path, document_url, uploaded_at, original_filename, document_type, document_date, total_amount, vendor_name')
       .eq('uploaded_by', user.id);
 
     // Apply filter logic
@@ -701,11 +745,14 @@ export default function Dashboard() {
                    const docType = doc.document_type?.toLowerCase() || 'file';
                    const docDateStr = doc.document_date || null;
                    const uploadedDateStr = doc.uploaded_at;
-                   const docName = doc.original_filename || doc.file_path.split('/').pop() || 'Document'; 
+                   // Use the helper function to generate the display name
+                   const displayFilename = generateDisplayFilename(doc);
 
                    return (
                     <TableRow key={doc.id}>
-                      <TableCell className="font-medium truncate max-w-0" title={docName}>{docName}</TableCell>
+                      <TableCell className="font-medium truncate max-w-0" title={displayFilename}>
+                          {displayFilename}
+                      </TableCell>
                       <TableCell>
                         <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full text-xs capitalize">
                           {docType}
@@ -796,6 +843,7 @@ export default function Dashboard() {
                  </div>
                ))
              )}
+             {/* Loading indicator */}
              {isLoadingChat && (
                <div className="flex justify-start">
                  <div className="bg-slate-200 dark:bg-slate-700 max-w-[85%] px-4 py-2 rounded-lg dark:text-white">
@@ -805,7 +853,7 @@ export default function Dashboard() {
              )}
            </div>
            
-         {/* Input Section - Should now be visible */} 
+         {/* Chat Input Section */}
          <div className="border-t dark:border-slate-700 pt-4">
            <form onSubmit={handleSendMessage} className="flex flex-col md:flex-row gap-2">
              <Textarea
@@ -814,12 +862,10 @@ export default function Dashboard() {
                placeholder="Ask about your documents..."
                className="flex-grow min-h-[60px] max-h-[120px]"
                onKeyDown={(e) => {
-                 // Check if Enter is pressed without Shift
                  if (e.key === 'Enter' && !e.shiftKey) {
-                   e.preventDefault(); // Prevent newline
-                   // Check if input is not empty and not loading before sending
+                   e.preventDefault(); 
                    if (chatInput.trim() && !isLoadingChat) {
-                     handleSendMessage(e as unknown as React.FormEvent); // Call submit handler
+                     handleSendMessage(e as unknown as React.FormEvent); 
                    }
                  }
                }}
@@ -838,26 +884,7 @@ export default function Dashboard() {
              </Button>
            </form>
          </div>
-       </div>
-    </div>
+       </div>{/* End Right Chat Panel */}
+    </div> // End Main Flex Container
   );
 }
-
-// --- Database Function (Example) ---
-/* 
-Add this function in your Supabase SQL Editor if you prefer RPC over direct select:
-
-CREATE OR REPLACE FUNCTION get_distinct_document_types(user_id_param uuid)
-RETURNS TABLE(document_type text)
-LANGUAGE sql
-STABLE -- Indicates the function doesn't modify the database
-AS $$
-  SELECT DISTINCT LTRIM(RTRIM(extracted_data->>'type')) AS document_type 
-  FROM public.documents
-  WHERE uploaded_by = user_id_param
-  AND jsonb_typeof(extracted_data->'type') = 'string' -- Ensure it's a string
-  AND extracted_data->>'type' IS NOT NULL
-  AND LTRIM(RTRIM(extracted_data->>'type')) <> ''; -- Ensure it's not empty/whitespace
-$$;
-
-*/
