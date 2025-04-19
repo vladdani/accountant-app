@@ -101,8 +101,17 @@ interface ChatMessage {
 
 // Interface for sidebar filters
 interface Filter {
-  type: 'special' | 'category' | 'date'; // 'special' = all, recent, starred
-  value: string; // e.g., 'all', 'invoice', '2024-03'
+  type: 'special' | 'category' | 'date' | 'path'; // Add 'path' type for virtual file system
+  value: string; // e.g., 'all', 'invoice', '2024-03', or '/2024/03/Booking.com'
+}
+
+// Interface for virtual file system
+interface FileNode {
+  name: string;
+  type: 'folder' | 'vendor';
+  children: FileNode[];
+  documents?: Document[];
+  path: string; // Full path to this node (for navigation)
 }
 
 // --- End Types ---
@@ -160,15 +169,15 @@ export default function Dashboard() {
   // const [isMobile, setIsMobile] = useState<boolean>(false);
   
   // State for document display and filtering
-  const [documents, setDocuments] = useState<Document[]>([]); // Use the updated Document interface
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [isLoadingDocuments, setIsLoadingDocuments] = useState<boolean>(true);
   const [selectedFilter, setSelectedFilter] = useState<Filter>({ type: 'special', value: 'all' });
   const [availableTypes, setAvailableTypes] = useState<string[]>([]);
   const [isLoadingTypes, setIsLoadingTypes] = useState<boolean>(true);
   const [processingDocId, setProcessingDocId] = useState<string | null>(null); // State for AI processing
   // TODO: Add state for available dates (years/months) later
-  const [documentCount, setDocumentCount] = useState<number>(0); // State for document count
-  const [isLoadingCount, setIsLoadingCount] = useState(true); // Loading state for count
+  const [documentCount, setDocumentCount] = useState<number>(0);
+  const [isLoadingCount, setIsLoadingCount] = useState(true);
 
   // State for chat
   const chatLocalStorageKey = user ? `chatHistory-${user.id}` : null; // Key for localStorage
@@ -178,6 +187,10 @@ export default function Dashboard() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false); // State for mobile sidebar
   const [mobileView, setMobileView] = useState<'chat' | 'documents'>('chat'); // State for mobile view ('chat' or 'documents')
   const chatContainerRef = useRef<HTMLDivElement>(null); 
+
+  // Add new state for virtual file system
+  const [fileSystem, setFileSystem] = useState<FileNode[]>([]);
+  const [isLoadingFileSystem, setIsLoadingFileSystem] = useState<boolean>(true);
 
   // --- Helper Functions for Data Fetching ---
   const fetchTypes = useCallback(async () => {
@@ -214,6 +227,91 @@ export default function Dashboard() {
     }
   }, [user?.id]);
 
+  // Helper function to build virtual file system
+  const buildFileSystem = useCallback((docs: Document[]) => {
+    // Skip if no documents
+    if (!docs || docs.length === 0) {
+      setFileSystem([]);
+      return;
+    }
+
+    console.log("Building virtual file system from", docs.length, "documents");
+    const root: Record<string, FileNode> = {}; // Year folders
+
+    docs.forEach(doc => {
+      // Skip documents without dates
+      if (!doc.document_date) return;
+      
+      // Get date components
+      const docDate = new Date(doc.document_date);
+      if (isNaN(docDate.getTime())) return; // Skip invalid dates
+      
+      const year = docDate.getFullYear().toString();
+      const month = docDate.toLocaleString('default', { month: 'long' });
+      const vendor = doc.vendor || 'Unknown Vendor';
+      
+      // Create year folder if it doesn't exist
+      if (!root[year]) {
+        root[year] = {
+          name: year,
+          type: 'folder',
+          children: [],
+          path: `/${year}`
+        };
+      }
+      
+      // Find or create month folder
+      let monthFolder = root[year].children.find(child => child.name === month);
+      if (!monthFolder) {
+        monthFolder = {
+          name: month,
+          type: 'folder',
+          children: [],
+          path: `/${year}/${month}`
+        };
+        root[year].children.push(monthFolder);
+      }
+      
+      // Find or create vendor folder
+      let vendorFolder = monthFolder.children.find(child => child.name === vendor);
+      if (!vendorFolder) {
+        vendorFolder = {
+          name: vendor,
+          type: 'vendor',
+          children: [],
+          documents: [],
+          path: `/${year}/${month}/${vendor}`
+        };
+        monthFolder.children.push(vendorFolder);
+      }
+      
+      // Add document to vendor folder
+      if (!vendorFolder.documents) {
+        vendorFolder.documents = [];
+      }
+      vendorFolder.documents.push(doc);
+    });
+    
+    // Convert to array and sort
+    const fileSystemArray = Object.values(root).sort((a, b) => b.name.localeCompare(a.name)); // Years in descending order
+    
+    // Sort months in each year (chronological order within year)
+    const monthOrder = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    fileSystemArray.forEach(yearFolder => {
+      yearFolder.children.sort((a, b) => {
+        return monthOrder.indexOf(a.name) - monthOrder.indexOf(b.name);
+      });
+      
+      // Sort vendors alphabetically
+      yearFolder.children.forEach(monthFolder => {
+        monthFolder.children.sort((a, b) => a.name.localeCompare(b.name));
+      });
+    });
+    
+    console.log("Virtual file system built with", fileSystemArray.length, "years");
+    setFileSystem(fileSystemArray);
+  }, []);
+
   const fetchDocuments = useCallback(async () => {
     if (!user?.id) return;
 
@@ -231,6 +329,39 @@ export default function Dashboard() {
     } else if (selectedFilter.type === 'date') {
       // TODO: Implement date filtering logic (e.g., year-month)
       console.log("Date filtering not yet implemented");
+    } else if (selectedFilter.type === 'path') {
+      // Virtual file system path filtering
+      // The path format is /Year/Month/Vendor
+      const pathParts = selectedFilter.value.split('/').filter(Boolean);
+      
+      if (pathParts.length >= 1) {
+        // Year filter
+        const year = pathParts[0];
+        // Filter by year part of document_date
+        query = query.ilike('document_date', `${year}-%`);
+        
+        if (pathParts.length >= 2) {
+          // Month filter - need to convert month name to number
+          const monthName = pathParts[1];
+          const monthIndex = ["January", "February", "March", "April", "May", "June", 
+                             "July", "August", "September", "October", "November", "December"]
+                             .indexOf(monthName);
+          
+          if (monthIndex !== -1) {
+            const monthNum = (monthIndex + 1).toString().padStart(2, '0');
+            // Refine filter to include month
+            query = query.ilike('document_date', `${year}-${monthNum}-%`);
+            
+            if (pathParts.length >= 3) {
+              // Vendor filter
+              const vendor = pathParts[2];
+              query = query.eq('vendor', vendor);
+            }
+          }
+        }
+      }
+      
+      console.log("Applied path filter:", selectedFilter.value);
     } else if (selectedFilter.type === 'special') {
       if (selectedFilter.value === 'recent') {
         query = query.order('uploaded_at', { ascending: false }).limit(20);
@@ -250,7 +381,7 @@ export default function Dashboard() {
     try {
       console.log("Executing Supabase documents query...");
       const { data, error } = await query;
-       // Log raw result before processing
+      // Log raw result before processing
       console.log("Documents query raw result:", { 
         count: data?.length || 0, 
         error 
@@ -431,6 +562,18 @@ export default function Dashboard() {
     }
   }, [chatMessages]);
 
+  // Call this when documents are loaded
+  useEffect(() => {
+    if (!isLoadingDocuments && documents.length > 0) {
+      setIsLoadingFileSystem(true);
+      buildFileSystem(documents);
+      setIsLoadingFileSystem(false);
+    } else if (!isLoadingDocuments) {
+      setFileSystem([]);
+      setIsLoadingFileSystem(false);
+    }
+  }, [documents, isLoadingDocuments, buildFileSystem]);
+
   // --- Helper Functions --- 
   const handleUploadSuccess = (result: { 
     success: boolean; 
@@ -556,6 +699,33 @@ export default function Dashboard() {
     }
   };
 
+  // Recursive component for rendering the file tree
+  const FileTreeNode = ({ node, level = 0 }: { node: FileNode; level?: number }) => {
+    const isCurrentPath = selectedFilter.type === 'path' && selectedFilter.value === node.path;
+    const nodeIcon = node.type === 'folder' ? <Folder className="mr-3 h-5 w-5" /> : <FileText className="mr-3 h-5 w-5" />;
+    
+    return (
+      <div className="flex flex-col">
+        <Button
+          variant={isCurrentPath ? "secondary" : "ghost"}
+          className={`w-full justify-start gap-2 ${level > 0 ? `pl-${level * 4 + 2}` : ''}`}
+          onClick={() => handleFilterChange({ type: 'path', value: node.path })}
+        >
+          {nodeIcon}
+          <span className="truncate">{node.name} {node.documents && `(${node.documents.length})`}</span>
+        </Button>
+        
+        {node.children && node.children.length > 0 && (
+          <div className="flex flex-col">
+            {node.children.map((child, index) => (
+              <FileTreeNode key={`${child.path}-${index}`} node={child} level={level + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // --- Conditional Returns *AFTER* all hooks ---
   if (isAuthLoading /*|| isTrialLoading*/) {
      return (
@@ -651,6 +821,21 @@ export default function Dashboard() {
                     ))
                   ) : (
                     <p className="text-xs text-slate-500">No categories found.</p>
+                  )}
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase mt-4 mb-2">File Explorer</h3>
+                  {isLoadingFileSystem ? (
+                    <div className="space-y-2">
+                      <Skeleton className="h-8 w-full" />
+                      <Skeleton className="h-8 w-full" />
+                    </div>
+                  ) : fileSystem.length > 0 ? (
+                    <div className="space-y-1 max-h-60 overflow-y-auto">
+                      {fileSystem.map((node, index) => (
+                        <FileTreeNode key={`root-${index}`} node={node} />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">No documents with dates found.</p>
                   )}
                   {/* TODO: Date Filter section could go here */} 
                </div>
