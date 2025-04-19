@@ -87,7 +87,7 @@ interface Document {
   document_type?: string | null;
   document_date?: string | null;
   total_amount?: number | null;
-  vendor_name?: string | null; // Add vendor name field
+  vendor?: string | null; // Changed from vendor_name to vendor
 }
 
 // Interface for chat messages
@@ -117,7 +117,7 @@ function generateDisplayFilename(doc: Document): string {
   const datePart = doc.document_date 
     ? new Date(doc.document_date).toISOString().split('T')[0] // Format YYYY-MM-DD
     : null;
-  const vendorPart = doc.vendor_name ? doc.vendor_name.replace(/[/\\?%*:|"<>]/g, '-') : null; // Sanitize vendor name
+  const vendorPart = doc.vendor ? doc.vendor.replace(/[/\\?%*:|"<>]/g, '-') : null; // Changed from vendor_name to vendor
   const typePart = doc.document_type ? doc.document_type.replace(/[/\\?%*:|"<>]/g, '-') : null; // Sanitize type
 
   let filename = '';
@@ -221,7 +221,7 @@ export default function Dashboard() {
     setIsLoadingDocuments(true);
     let query = supabase
       .from('documents')
-      .select('id, file_path, document_url, uploaded_at, original_filename, document_type, document_date, total_amount, vendor_name')
+      .select('id, file_path, document_url, uploaded_at, original_filename, document_type, document_date, total_amount, vendor')
       .eq('uploaded_by', user.id);
 
     // Apply filter logic
